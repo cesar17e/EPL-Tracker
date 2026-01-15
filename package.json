@@ -4,11 +4,13 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "rimraf dist && npx tsc",
-    "prestart": "npm run build",
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
     "start": "node dist/server.js",
-    "predev": "npm run build",
-    "dev": "concurrently \"npx tsc -w\" \"nodemon --watch dist dist/server.js\""
+
+    "migrate:latest": "NODE_ENV=development tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:latest",
+    "migrate:rollback": "NODE_ENV=development tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:rollback",
+    "migrate:make": "tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:make"
   },
   "keywords": [],
   "author": "",
@@ -21,12 +23,14 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "pg": "^8.16.3",
+    "knex": "^3.1.0",
+    "pg": "^8.17.0",
     "rimraf": "^6.1.2",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@types/pg": "^8.16.0",
-    "nodemon": "^3.1.11"
+    "nodemon": "^3.1.11",
+    "tsx": "^4.21.0"
   }
 }
