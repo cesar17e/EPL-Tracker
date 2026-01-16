@@ -30,5 +30,6 @@ export const shutdown = async (message: string, exitCode = 0) => {
   }
 };
 
+// Handle termination signals
 process.on("SIGINT", () => shutdown("SIGINT received. Shutting down..."));
 process.on("SIGTERM", () => shutdown("SIGTERM received. Shutting down..."));

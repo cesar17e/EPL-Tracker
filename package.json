@@ -5,9 +5,9 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsc",
     "start": "node dist/server.js",
-
     "migrate:latest": "NODE_ENV=development tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:latest",
     "migrate:rollback": "NODE_ENV=development tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:rollback",
     "migrate:make": "tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:make"
@@ -19,16 +19,22 @@
   "dependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.8",
+    "bcrypt": "^6.0.0",
     "concurrently": "^9.2.1",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
     "knex": "^3.1.0",
     "pg": "^8.17.0",
     "rimraf": "^6.1.2",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/cors": "^2.8.19",
     "@types/pg": "^8.16.0",
     "nodemon": "^3.1.11",
     "tsx": "^4.21.0"
