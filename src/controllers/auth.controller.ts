@@ -1,13 +1,13 @@
 import type { Request, Response } from "express";
-import { signAccessToken } from "../utils/tokens.js"; // issues short-lived access JWTs
+import { signAccessToken } from "../utils/tokens.js";
 import { clearRefreshCookie, setRefreshCookie, REFRESH_COOKIE_NAME } from "../utils/cookies.js";
 import {
   createUser,
   findUserByEmail,
   verifyPassword,
   storeRefreshToken,
-  isRefreshTokenValid,
   revokeRefreshToken,
+  rotateRefreshToken,
 } from "../services/auth.service.js";
 
 import { pool } from "../db/pool.js";
@@ -42,13 +42,14 @@ async function getUserById(id: number): Promise<User | null> {
   const r = await pool.query<User>(`SELECT * FROM users WHERE id = $1`, [id]);
   return r.rows[0] ?? null;
 }
+
 //-------End of Helpers------
 
 /**
  * Register a new user and start a session:
  * - create user row
  * - create refresh token session (DB + httpOnly cookie)
- * - return short-lived access token in JSON (15 mins)
+ * - return short-lived access token in JSON (e.g., 15 mins)
  */
 export async function register(req: Request, res: Response) {
   const parsed = parseEmailPassword(req);
@@ -59,15 +60,12 @@ export async function register(req: Request, res: Response) {
 
   const user = await createUser(parsed.email, parsed.password);
 
-  // Create refresh session (opaque token) and persist hashed token server-side
   const refreshToken = generateRefreshToken();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await storeRefreshToken(user.id, refreshToken, expiresAt);
 
-  // Send refresh token to the browser as an httpOnly cookie
   setRefreshCookie(res, refreshToken);
 
-  // Short-lived access token is returned to the client for Authorization: Bearer usage
   const accessToken = signAccessToken(user.id, user.email);
 
   return res.status(201).json({
@@ -108,20 +106,40 @@ export async function login(req: Request, res: Response) {
 
 /**
  * Refresh access token using the refresh_token cookie.
- * The refresh token is opaque; validity is checked in the DB (exists, not revoked, not expired).
+ *
+ * With rotation enabled:
+ * - the old refresh token becomes invalid (one-time use)
+ * - a new refresh token is created and sent back as a new cookie
+ * - a new short-lived access token is returned in JSON
  */
 export async function refresh(req: Request, res: Response) {
   const raw = req.cookies?.[REFRESH_COOKIE_NAME];
   if (!raw) return res.status(401).json({ error: "Missing refresh cookie" });
 
-  const valid = await isRefreshTokenValid(raw);
-  if (!valid) return res.status(401).json({ error: "Refresh token revoked/expired" });
+  try {
+    const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-  const user = await getUserById(valid.userId);
-  if (!user) return res.status(401).json({ error: "User no longer exists" });
+    // 1) Rotate refresh token (validate + revoke old + issue new)
+    const { userId, newRefreshToken } = await rotateRefreshToken(raw, newExpiresAt);
 
-  const accessToken = signAccessToken(user.id, user.email);
-  return res.json({ accessToken });
+    // 2) Replace refresh cookie with the new token
+    setRefreshCookie(res, newRefreshToken);
+
+    // 3) Mint new access token
+    const user = await getUserById(userId);
+    if (!user) return res.status(401).json({ error: "User no longer exists" });
+
+    const accessToken = signAccessToken(user.id, user.email);
+    return res.json({ accessToken });
+  } catch (err: any) {
+    if (err?.message === "REFRESH_INVALID") {
+      // Invalid/expired/reused refresh token -> clear cookie and force re-login
+      clearRefreshCookie(res);
+      return res.status(401).json({ error: "Refresh token revoked/expired" });
+    }
+    console.error("Refresh error:", err);
+    return res.status(500).json({ error: "Server error refreshing token" });
+  }
 }
 
 /**
