@@ -19,6 +19,8 @@
   "dependencies": {
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.8",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.36.1",
     "bcrypt": "^6.0.0",
     "concurrently": "^9.2.1",
     "cookie-parser": "^1.4.7",

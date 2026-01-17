@@ -3,17 +3,19 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import routes from "./routes/index.js";
-import { pool, shutdown } from "./db/pool.js";
 
 dotenv.config();
+
+import { pool, shutdown } from "./db/pool.js";
+
 
 const app = express();
 
 // If you later add a frontend on another origin, you will set FRONTEND_ORIGIN
-// For now (Postman testing), this is fine:
+// For now (Postman testing will do)
 app.use(
   cors({
-    origin: "*", //All for now
+    origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
     credentials: true,
   })
 );
