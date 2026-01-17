@@ -8,11 +8,17 @@ import {
   storeRefreshToken,
   revokeRefreshToken,
   rotateRefreshToken,
+  createEmailVerificationToken,
+  consumeEmailVerificationToken,
+  markUserEmailVerified,
 } from "../services/auth.service.js";
 
 import { pool } from "../db/pool.js";
 import type { User } from "../db/types.js";
 import crypto from "crypto";
+
+import validator from "validator";
+import { hasMxRecord } from "../utils/email.js";
 
 //---Helpers ---
 
@@ -43,6 +49,20 @@ async function getUserById(id: number): Promise<User | null> {
   return r.rows[0] ?? null;
 }
 
+//Email helpers
+
+function buildVerifyLink(rawToken: string) {
+  const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 8000}`;
+  // Your API base is /api already in server.ts
+  return `${baseUrl}/api/auth/verify-email?token=${rawToken}`;
+}
+
+function sendVerifyEmailDev(email: string, link: string) {
+  // Minimal “emailer” for now: just log the link.
+  // Later we can swap this to Resend/Nodemailer with same signature.
+  console.log(`\n[VERIFY EMAIL]\nTo: ${email}\nLink: ${link}\n`);
+}
+
 //-------End of Helpers------
 
 /**
@@ -50,15 +70,33 @@ async function getUserById(id: number): Promise<User | null> {
  * - create user row
  * - create refresh token session (DB + httpOnly cookie)
  * - return short-lived access token in JSON (e.g., 15 mins)
+ * - Uses the mx checker for valid domian type
  */
 export async function register(req: Request, res: Response) {
   const parsed = parseEmailPassword(req);
   if (!parsed) return res.status(400).json({ error: "email and password are required" });
 
+  //Level 1: format check
+  if (!validator.isEmail(parsed.email)) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+
+  //Level 2: domain can receive mail (MX records)
+  if (!(await hasMxRecord(parsed.email))) {
+    return res.status(400).json({ error: "Email domain does not accept mail" });
+  }
+
   const existing = await findUserByEmail(parsed.email);
   if (existing) return res.status(409).json({ error: "Email already in use" });
 
   const user = await createUser(parsed.email, parsed.password);
+
+  // Create verification token (24h) and "send" link (dev logs)
+  const verifyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const rawVerifyToken = await createEmailVerificationToken(user.id, verifyExpiresAt);
+  const verifyLink = buildVerifyLink(rawVerifyToken);
+  sendVerifyEmailDev(user.email, verifyLink);
+
 
   const refreshToken = generateRefreshToken();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -73,6 +111,7 @@ export async function register(req: Request, res: Response) {
     accessToken,
   });
 }
+
 
 /**
  * Log a user in:
@@ -154,4 +193,51 @@ export async function logout(req: Request, res: Response) {
   }
   clearRefreshCookie(res);
   return res.json({ ok: true });
+}
+
+
+
+/**
+ * Verify email using a token from the verification link.
+ * This flips users.email_verified to true.
+ */
+export async function verifyEmail(req: Request, res: Response) {
+  const token = req.query.token;
+  if (!token || typeof token !== "string") {
+    return res.status(400).json({ error: "Missing token" });
+  }
+
+  const userId = await consumeEmailVerificationToken(token);
+  if (!userId) {
+    return res.status(400).json({ error: "Invalid or expired token" });
+  }
+
+  await markUserEmailVerified(userId);
+  return res.json({ ok: true, message: "Email verified" });
+}
+
+/**
+ * Resend verification link (for unverified users).
+ * Caller must be logged in (requireAuth), but still unverified.
+ */
+export async function requestVerify(req: Request, res: Response) {
+  // requireAuth attaches req.user
+  // @ts-expect-error (you can type this later with AuthedRequest)
+  const userId = req.user?.id as number | undefined;
+
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const user = await getUserById(userId);
+  if (!user) return res.status(404).json({ error: "User not found" });
+
+  if (user.email_verified) {
+    return res.json({ ok: true, message: "Email already verified" });
+  }
+
+  const verifyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const rawVerifyToken = await createEmailVerificationToken(user.id, verifyExpiresAt);
+  const verifyLink = buildVerifyLink(rawVerifyToken);
+  sendVerifyEmailDev(user.email, verifyLink);
+
+  return res.json({ ok: true, message: "Verification link sent" });
 }

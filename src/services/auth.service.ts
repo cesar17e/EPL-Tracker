@@ -181,3 +181,85 @@ export async function rotateRefreshToken(
     throw err;
   }
 }
+
+// ----- Email verification helpers -----
+
+/**
+ * Create a new email verification token for the user.
+ * Stores only the token hash in the DB. Returns the raw token to embed in a link.
+ */
+export async function createEmailVerificationToken( userId: number, expiresAt: Date): Promise<string> {
+  const rawToken = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = sha256(rawToken);
+
+  await pool.query(
+    `
+    INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
+    VALUES ($1, $2, $3)
+    `,
+    [userId, tokenHash, expiresAt.toISOString()]
+  );
+
+  return rawToken;
+}
+
+/**
+ * Verify a token and mark it used (one-time).
+ * Returns userId if valid, otherwise null.
+ */
+export async function consumeEmailVerificationToken(rawToken: string): Promise<number | null> {
+  const tokenHash = sha256(rawToken);
+
+  await pool.query("BEGIN");
+  try {
+    // Lock row so token can't be used twice concurrently
+    const r = await pool.query<{ user_id: number }>(
+      `
+      SELECT user_id
+      FROM email_verification_tokens
+      WHERE token_hash = $1
+        AND used_at IS NULL
+        AND expires_at > now()
+      FOR UPDATE
+      `,
+      [tokenHash]
+    );
+
+    const row = r.rows[0];
+    if (!row) {
+      await pool.query("ROLLBACK");
+      return null;
+    }
+
+    // Mark token as used
+    await pool.query(
+      `
+      UPDATE email_verification_tokens
+      SET used_at = now()
+      WHERE token_hash = $1 AND used_at IS NULL
+      `,
+      [tokenHash]
+    );
+
+    await pool.query("COMMIT");
+    return Number(row.user_id);
+  } catch (err) {
+    await pool.query("ROLLBACK");
+    throw err;
+  }
+}
+
+/**
+ * Mark a user's email as verified.
+ */
+export async function markUserEmailVerified(userId: number): Promise<void> {
+  await pool.query(
+    `
+    UPDATE users
+    SET email_verified = true,
+        updated_at = now()
+    WHERE id = $1
+    `,
+    [userId]
+  );
+}

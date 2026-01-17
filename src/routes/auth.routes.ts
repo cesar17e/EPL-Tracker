@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { register, login, refresh, logout } from "../controllers/auth.controller.js";
+import { register, login, refresh, logout, verifyEmail, requestVerify } from "../controllers/auth.controller.js";
 import { requireAuth } from "../middlware/requireAuth.js"
 import rateLimiter from "../middlware/rateLimiter.js";
 
@@ -11,6 +11,8 @@ router.post("/register", rateLimiter, register);
 router.post("/login", rateLimiter, login);
 router.post("/refresh", rateLimiter, refresh);
 router.post("/logout", rateLimiter, logout);
+router.get("/verify-email", verifyEmail); // link click (no auth required)
+router.post("/request-verify", requireAuth, rateLimiter, requestVerify); // resend link
 
 // Example protected route to test access token:
 router.get("/me", requireAuth, (req, res) => {

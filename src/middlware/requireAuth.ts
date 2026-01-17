@@ -1,14 +1,26 @@
 import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken } from "../utils/tokens.js";
+import { pool } from "../db/pool.js";
 
-//Authetication middleware, it checks if the user has a valid jwt, then adds the users id and email to the request
+// Authentication middleware:
+// Verifies JWT
+// Loads current user state from DB
 
 export interface AuthedRequest extends Request {
-  user?: { id: number; email: string };
+  user?: {
+    id: number;
+    email: string;
+    email_verified: boolean;
+  };
 }
 
-export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
+export async function requireAuth(
+  req: AuthedRequest,
+  res: Response,
+  next: NextFunction
+) {
   const header = req.headers.authorization;
+
   if (!header || !header.startsWith("Bearer ")) {
     return res.status(401).json({ error: "Missing Authorization Bearer token" });
   }
@@ -16,10 +28,33 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
   const token = header.slice("Bearer ".length);
 
   try {
+    // Verify JWT 
     const payload = verifyAccessToken(token);
-    req.user = { id: Number(payload.sub), email: payload.email }; //append to the request
+    const userId = Number(payload.sub);
+
+    // Load user state from DB
+    const result = await pool.query<{
+      id: number;
+      email: string;
+      email_verified: boolean;
+    }>(
+      `
+      SELECT id, email, email_verified
+      FROM users
+      WHERE id = $1
+      `,
+      [userId]
+    );
+
+    const user = result.rows[0];
+    if (!user) {
+      return res.status(401).json({ error: "User no longer exists" });
+    }
+
+    // Attach fresh user state to request
+    req.user = user;
     return next();
-  } catch {
+  } catch (err) {
     return res.status(401).json({ error: "Invalid or expired token" });
   }
 }
