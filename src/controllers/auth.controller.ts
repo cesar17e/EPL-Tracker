@@ -20,6 +20,9 @@ import crypto from "crypto";
 import validator from "validator";
 import { hasMxRecord } from "../utils/email.js";
 
+import { sendVerifyEmail } from "../services/email.service.js";
+
+
 //---Helpers ---
 
 /**
@@ -57,11 +60,6 @@ function buildVerifyLink(rawToken: string) {
   return `${baseUrl}/api/auth/verify-email?token=${rawToken}`;
 }
 
-function sendVerifyEmailDev(email: string, link: string) {
-  // Minimal “emailer” for now: just log the link.
-  // Later we can swap this to Resend/Nodemailer with same signature.
-  console.log(`\n[VERIFY EMAIL]\nTo: ${email}\nLink: ${link}\n`);
-}
 
 //-------End of Helpers------
 
@@ -99,7 +97,7 @@ export async function register(req: Request, res: Response) {
   const verifyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const rawVerifyToken = await createEmailVerificationToken(user.id, verifyExpiresAt);
   const verifyLink = buildVerifyLink(rawVerifyToken);
-  sendVerifyEmailDev(user.email, verifyLink);
+  const emailResult = await sendVerifyEmail(user.email, verifyLink);
 
   //Give them a refresh token
   const refreshToken = generateRefreshToken();
@@ -114,6 +112,7 @@ export async function register(req: Request, res: Response) {
   return res.status(201).json({
     user: { id: user.id, email: user.email },
     accessToken,
+    ...(emailResult.mode === "demo" ? { verifyLink: emailResult.verifyLink } : {}),
   });
 }
 
@@ -257,7 +256,11 @@ export async function requestVerify(req: Request, res: Response) {
   const verifyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const rawVerifyToken = await createEmailVerificationToken(user.id, verifyExpiresAt);
   const verifyLink = buildVerifyLink(rawVerifyToken);
-  sendVerifyEmailDev(user.email, verifyLink);
+  const emailResult = await sendVerifyEmail(user.email, verifyLink);
 
-  return res.json({ ok: true, message: "Verification link sent" });
+  return res.json({
+    ok: true,
+    message: "Verification link sent",
+    ...(emailResult.mode === "demo" ? { verifyLink: emailResult.verifyLink } : {}),
+  });
 }

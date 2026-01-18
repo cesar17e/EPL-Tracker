@@ -5,57 +5,58 @@ import ratelimit from "../config/upstash.js";
 /**
  * Rate-limiting middleware for Express.
  *
- * This middleware:
- * - Identifies the caller (user ID if authenticated, otherwise IP)
- * - Checks request allowance against Upstash Redis
- * - Blocks requests if the limit is exceeded
+ * Minimal safety improvements:
+ * 1) Use a more reliable IP fallback (handles proxy setups better when `trust proxy` is enabled).
+ * 2) Add a route "bucket" prefix so /login spam doesn't rate-limit /refresh, etc.
+ *
+ * NOTE: In production, also add this once in server.ts:
+ *   app.set("trust proxy", 1);
  */
+function getClientIp(req: Request) {
+  // If `app.set("trust proxy", 1)` is set, req.ip will reflect X-Forwarded-For properly.
+  // This fallback helps in local/dev or misconfigured environments.
+  const xff = (req.headers["x-forwarded-for"] as string | undefined)
+    ?.split(",")[0]
+    ?.trim();
+
+  return req.ip || xff || req.socket.remoteAddress || "unknown";
+}
+
 export default async function rateLimiter(
   req: Request,
   res: Response,
   next: NextFunction
 ) {
   try {
-    /**
-     * Identify who is making the request.
-     *
-     * Priority:
-     *  Authenticated user ID (strongest identifier)
-     *  IP address (for unauthenticated routes like /login, /register)
-     *
-     */
-    const identifier =
+    // Base identifier: user id if authenticated, otherwise IP
+    const baseIdentifier =
       (req as any).user?.id
-        ? `user_${(req as any).user.id}` // logged-in user
-        : req.ip || req.socket.remoteAddress || "unknown"; // anonymous client
+        ? `user_${(req as any).user.id}`
+        : `ip_${getClientIp(req)}`;
 
-    //Ask Upstash if this identifier is allowed to make a request.
+    /**
+     * Route bucket prefix:
+     * - Prevents different endpoints from "sharing" the same rate-limit bucket.
+     * - Example: /login won't accidentally block /refresh.
+     *
+     * Use req.baseUrl + req.path so it stays consistent even when mounted under /api/auth.
+     */
+    const routeBucket = `${req.baseUrl}${req.path}`; // e.g. "/api/auth/login"
+    const identifier = `route_${routeBucket}:${baseIdentifier}`;
+
+    // Ask Upstash if this identifier is allowed to make a request.
     const result = await ratelimit.limit(identifier);
 
-    /**
-     * If the rate limit is exceeded:
-     * - Return HTTP 429 (Too Many Requests)
-     * - Do NOT call next()
-     * - Stop request processing immediately
-     */
     if (!result.success) {
       return res.status(429).json({
         message: "Too many requests. Please slow down.",
       });
     }
 
-    /**
-     * Request is within allowed limits.
-     * Continue to the next middleware or route handler.
-     */
-    next();
+    return next();
   } catch (err) {
-    /**
-     * If the rate limiter fails (network issue, Upstash outage, etc):
-     *
-     * Log the error
-     */
+    // Fail-open: don't block auth if Upstash errors out
     console.error("Rate limiter error:", err);
-    next();
+    return next();
   }
 }

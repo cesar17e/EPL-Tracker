@@ -10,6 +10,7 @@ import { pool, shutdown } from "./db/pool.js";
 
 
 const app = express();
+app.set("trust proxy", 1); //for render
 
 // If you later add a frontend on another origin, you will set FRONTEND_ORIGIN
 // For now (Postman testing will do)
