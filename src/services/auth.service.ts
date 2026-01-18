@@ -128,11 +128,11 @@ export async function rotateRefreshToken(
 ): Promise<{ userId: number; newRefreshToken: string }> {
   const oldHash = sha256(rawRefreshToken);
 
-  // Generate the next refresh token (opaque)
+  // Generate the next refresh token
   const newRefreshToken = crypto.randomBytes(32).toString("base64url");
   const newHash = sha256(newRefreshToken);
 
-  await pool.query("BEGIN");
+  await pool.query("BEGIN"); 
   try {
     // 1) Lock the session row so two refresh calls can't both succeed
     const sessionRes = await pool.query<{ user_id: number }>(
@@ -189,9 +189,10 @@ export async function rotateRefreshToken(
  * Stores only the token hash in the DB. Returns the raw token to embed in a link.
  */
 export async function createEmailVerificationToken( userId: number, expiresAt: Date): Promise<string> {
-  const rawToken = crypto.randomBytes(32).toString("base64url");
-  const tokenHash = sha256(rawToken);
+  const rawToken = crypto.randomBytes(32).toString("base64url"); //Random string
+  const tokenHash = sha256(rawToken); //Hashes string
 
+  //Insert
   await pool.query(
     `
     INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
@@ -208,7 +209,7 @@ export async function createEmailVerificationToken( userId: number, expiresAt: D
  * Returns userId if valid, otherwise null.
  */
 export async function consumeEmailVerificationToken(rawToken: string): Promise<number | null> {
-  const tokenHash = sha256(rawToken);
+  const tokenHash = sha256(rawToken); //hash it
 
   await pool.query("BEGIN");
   try {

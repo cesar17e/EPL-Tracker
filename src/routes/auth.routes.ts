@@ -9,9 +9,11 @@ const router = Router();
 
 router.post("/register", rateLimiter, register);
 router.post("/login", rateLimiter, login);
+
+//Refresh logic for tokens
 router.post("/refresh", rateLimiter, refresh);
 router.post("/logout", rateLimiter, logout);
-router.get("/verify-email", verifyEmail); // link click (no auth required)
+router.get("/verify-email", verifyEmail); // link click 
 router.post("/request-verify", requireAuth, rateLimiter, requestVerify); // resend link
 
 // Example protected route to test access token:

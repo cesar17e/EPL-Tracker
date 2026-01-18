@@ -66,17 +66,21 @@ function sendVerifyEmailDev(email: string, link: string) {
 //-------End of Helpers------
 
 /**
- * Register a new user and start a session:
- * - create user row
- * - create refresh token session (DB + httpOnly cookie)
- * - return short-lived access token in JSON (e.g., 15 mins)
- * - Uses the mx checker for valid domian type
+ * Register a new user and starts a session:
+ *      Create user row
+ *      Create refresh token session (DB + httpOnly cookie)
+ *      Return acess token in JSON 
+ *      Uses the mx checker for valid domian type
+ *
+ * Req --> The user will send a password and an email as their username in json format
+ * 
+ * Response --> Will send to the client the users id, their email and a json token
  */
 export async function register(req: Request, res: Response) {
-  const parsed = parseEmailPassword(req);
+  const parsed = parseEmailPassword(req); 
   if (!parsed) return res.status(400).json({ error: "email and password are required" });
 
-  //Level 1: format check
+  //Level 1: format check using validator
   if (!validator.isEmail(parsed.email)) {
     return res.status(400).json({ error: "Invalid email format" });
   }
@@ -91,19 +95,20 @@ export async function register(req: Request, res: Response) {
 
   const user = await createUser(parsed.email, parsed.password);
 
-  // Create verification token (24h) and "send" link (dev logs)
+  // Create verification token (24h) and "send" link (dev logs) for now
   const verifyExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   const rawVerifyToken = await createEmailVerificationToken(user.id, verifyExpiresAt);
   const verifyLink = buildVerifyLink(rawVerifyToken);
   sendVerifyEmailDev(user.email, verifyLink);
 
-
+  //Give them a refresh token
   const refreshToken = generateRefreshToken();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await storeRefreshToken(user.id, refreshToken, expiresAt);
 
-  setRefreshCookie(res, refreshToken);
+  setRefreshCookie(res, refreshToken); 
 
+  //Now give them a jwt 
   const accessToken = signAccessToken(user.id, user.email);
 
   return res.status(201).json({
@@ -118,6 +123,10 @@ export async function register(req: Request, res: Response) {
  * - verify credentials
  * - create refresh session (DB + cookie)
  * - return short-lived access token
+ * 
+ * Req --> Should include their eail and password in json format
+ * 
+ * Res --> Will send to the client the users id, their email and a json token 
  */
 export async function login(req: Request, res: Response) {
   const parsed = parseEmailPassword(req);
@@ -130,11 +139,13 @@ export async function login(req: Request, res: Response) {
   if (!ok) return res.status(401).json({ error: "Invalid credentials" });
 
   const refreshToken = generateRefreshToken();
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); //7 days
   await storeRefreshToken(user.id, refreshToken, expiresAt);
 
+  //Give them a refresh cookie
   setRefreshCookie(res, refreshToken);
 
+  //Give them a jwt
   const accessToken = signAccessToken(user.id, user.email);
 
   return res.json({
@@ -202,6 +213,15 @@ export async function logout(req: Request, res: Response) {
  * This flips users.email_verified to true.
  */
 export async function verifyEmail(req: Request, res: Response) {
+  /*  
+  How it works,
+  When a request comes in, Express:
+    Takes the URL, verify-email?token=abc123, Parses the query string (?token=abc123) Puts it on req.query as a plain JS object:
+    req.query = {
+      token: "abc123"
+    }
+    So we don’t have to manually parse the URL at all.
+  */
   const token = req.query.token;
   if (!token || typeof token !== "string") {
     return res.status(400).json({ error: "Missing token" });
