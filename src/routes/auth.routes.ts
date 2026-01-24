@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { register, login, refresh, logout, verifyEmail, requestVerify } from "../controllers/auth.controller.js";
-import { requireAuth } from "../middlware/requireAuth.js"
-import rateLimiter from "../middlware/rateLimiter.js";
+import { requireAuth } from "../middleware/requireAuth.js"
+import rateLimiter from "../middleware/rateLimiter.js";
 
 //Routes for authentication
 
