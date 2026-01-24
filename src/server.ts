@@ -12,7 +12,7 @@ import { pool, shutdown } from "./db/pool.js";
 const app = express();
 app.set("trust proxy", 1); //for render
 
-// If you later add a frontend on another origin, you will set FRONTEND_ORIGIN
+// If I later add a frontend on another origin, i will set FRONTEND_ORIGIN
 // For now (Postman testing will do)
 app.use(
   cors({
@@ -24,7 +24,7 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
-// Routes, we will use a global routes
+// Routes, we will use a global routes, this goes to index.ts and nest from there
 app.use("/api", routes);
 
 // Health check + DB test on startup
