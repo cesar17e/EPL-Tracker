@@ -117,3 +117,51 @@ export async function getTeamForm(req: Request, res: Response, next: NextFunctio
   }
 }
 
+
+//The team trends, our default with no qeury on the endpoint is 20 and the default window is 5
+/*
+Will return something like this as an example, we see a list of sort of form stats per window
+{
+  "labels": ["2025-10-10" (start game of window 1),"2025-10-17","2025-10-24"],
+  "ppgSeries": [1.4(ppg avg for winow 1), 1.8, 2.2], --> Points per game 
+  "gfPerMatchSeries": [1.2(avg for window one), 1.6, 2.0], --> Goals for team
+  "gaPerMatchSeries": [1.6, 1.2, 0.8] --> Goals against
+  --> And some more fields like goals difference per match
+   this team
+}
+Meaning:
+First point --> performance in games 1–5
+Second point --> performance in games 2–6
+Third point --> performance in games 3–7
+
+A rolling window means:
+- Look at 5 matches
+- Compute stats
+- Move forward 1 match
+- Repeat until you run out of matches
+*/
+export async function getTeamTrends(req: Request, res: Response, next: NextFunction) {
+  try {
+    const teamId = Number(req.params.teamId);
+    if (!Number.isFinite(teamId) || teamId <= 0) {
+      return res.status(400).json({ message: "Invalid teamId" });
+    }
+
+    const matchesRaw = Number(req.query.matches ?? 20);
+    const matches = Number.isFinite(matchesRaw) ? Math.min(Math.max(matchesRaw, 5), 50) : 20;
+
+    const windowRaw = Number(req.query.window ?? 5);
+    const window = Number.isFinite(windowRaw) ? Math.min(Math.max(windowRaw, 2), 10) : 5;
+
+    if (window > matches) {
+      return res.status(400).json({ message: "window must be <= matches" });
+    }
+
+    const trends = await teamsService.getTeamTrends(teamId, { matches, window });
+    return res.json(trends);
+  } catch (err) {
+    next(err);
+  }
+}
+
+

@@ -585,3 +585,170 @@ export async function getTeamForm(teamId: number, opts: { matches: number }) {
   };
 }
 
+/**
+ * Computes rolling "trend" metrics for a team based on recent finished matches.
+ *
+ * It builds time-series data (arrays) that show how a team's recent performance changes over time using a sliding window.
+ *
+ * Example:
+ *   opts.matches = 20  -->  use last 20 finished matches as input
+ *   opts.window  = 5  --> compute rolling stats over 5-game windows
+ *
+ * For each consecutive window of window matches, we compute:
+ *   - Points per game (PPG)
+ *   - Goal difference per match
+ *   - Goals for per match
+ *   - Goals against per match
+ * 
+ *   - "5-game rolling PPG"
+ *   - "5-game rolling goals per match"
+ * 
+ * A rolling window means:
+- Look at 5 matches
+- Compute stats
+- Move forward 1 match
+- Repeat until you run out of matches
+
+ * *
+ * Returns:
+ *   {
+ *     teamId: number,
+ *     matches: number,               // total matches used
+ *     window: number,                // rolling window size
+ *     labels: string[],              // dates (end of each window)
+ *     ppgSeries: number[],           // PPG over each window
+ *     gdPerMatchSeries: number[],    // goal diff per match
+ *     gfPerMatchSeries: number[],    // goals for per match
+ *     gaPerMatchSeries: number[]     // goals against per match
+ *   }
+ */
+
+export async function getTeamTrends(
+  teamId: number,
+  opts: { matches: number; window: number }
+) {
+  // 1) Load team for external id
+  const teamRes = await pool.query<TeamRow>(
+    `SELECT id, external_team_id, name FROM teams WHERE id = $1`,
+    [teamId]
+  );
+
+  const team = teamRes.rows[0];
+  if (!team) {
+    const err: any = new Error("Team not found");
+    err.status = 404;
+    throw err;
+  }
+
+  const teamExternalId = team.external_team_id;
+
+  // 2) Pull last N ended matches (DESC newest -> oldest)
+  const { rows } = await pool.query<{
+    winner: number | null;
+    home_team_external_id: number;
+    away_team_external_id: number;
+    home_score: string | null;
+    away_score: string | null;
+    start_time: string;
+  }>(
+    `
+    SELECT
+      winner,
+      home_team_external_id,
+      away_team_external_id,
+      home_score,
+      away_score,
+      start_time
+    FROM matches
+    WHERE (home_team_external_id = $1 OR away_team_external_id = $1)
+      AND LOWER(COALESCE(status_text, short_status_text, '')) = 'ended'
+    ORDER BY start_time DESC
+    LIMIT $2
+    `,
+    [teamExternalId, opts.matches]
+  );
+
+  // If not enough data return an empty set UI deals with it
+  if (rows.length < opts.window) {
+    return {
+      teamId: team.id,
+      matches: rows.length,
+      window: opts.window,
+      pointsSeries: [],
+      ppgSeries: [],
+      gdSeries: [],
+      gfSeries: [],
+      gaSeries: [],
+      labels: [],
+    };
+  }
+
+  // 3) Convert to per-match stats
+  //Since we did order by desc of start time of the game so we got back new to old but we reverse here to get games from old to new
+  const chronological = [...rows].reverse();
+
+  type MatchStat = {
+    date: string; // ISO string from DB (start time)
+    points: number;
+    gf: number;
+    ga: number;
+    gd: number;
+  };
+
+  
+ //Converts each match into a per-match stat object. We put it in this new array called stats
+  const stats: MatchStat[] = chronological.map((m) => {
+    const teamIsHome = m.home_team_external_id === teamExternalId;
+    const homeScore = numOrNull(m.home_score) ?? 0;
+    const awayScore = numOrNull(m.away_score) ?? 0;
+
+    const gf = teamIsHome ? homeScore : awayScore;
+    const ga = teamIsHome ? awayScore : homeScore;
+    const gd = gf - ga;
+
+    const r = getTeamResultForMatch(m, teamExternalId);
+    const points = r === "W" ? 3 : r === "D" ? 1 : 0;
+
+    return { date: m.start_time, points, gf, ga, gd };
+  });
+
+  // Rolling window helper
+  const roll = (arr: MatchStat[], window: number, pick: (x: MatchStat) => number) => {
+    const out: number[] = [];
+    for (let i = 0; i <= arr.length - window; i++) {
+      let sum = 0;
+      for (let j = i; j < i + window; j++) sum += pick(arr[j]!); //Even if it is null we set it to 0 above
+      out.push(sum);
+    }
+    return out;
+  };
+
+  const w = opts.window;
+
+  // Rolling totals over the last window games at each point
+  const rollingPoints = roll(stats, w, (x) => x.points);
+  const rollingGf = roll(stats, w, (x) => x.gf);
+  const rollingGa = roll(stats, w, (x) => x.ga);
+  const rollingGd = roll(stats, w, (x) => x.gd);
+
+  // Convert to per-game averages 
+  const rollingPpg = rollingPoints.map((x) => Number((x / w).toFixed(2)));
+  const gdPerMatch = rollingGd.map((x) => Number((x / w).toFixed(2)));
+  const gfPerMatch = rollingGf.map((x) => Number((x / w).toFixed(2)));
+  const gaPerMatch = rollingGa.map((x) => Number((x / w).toFixed(2)));
+
+  // labels correspond to the END of each window (nice for charts)
+  const labels = stats.slice(w - 1).map((x) => x.date);
+
+  return {
+    teamId: team.id,
+    matches: stats.length,
+    window: w,
+    labels, // same length as each series below
+    ppgSeries: rollingPpg,
+    gdPerMatchSeries: gdPerMatch,
+    gfPerMatchSeries: gfPerMatch,
+    gaPerMatchSeries: gaPerMatch,
+  };
+}
+
