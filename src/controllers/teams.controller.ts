@@ -84,3 +84,36 @@ export async function getTeamMatches(req: Request, res: Response, next: NextFunc
     next(err);
   }
 }
+
+
+/*
+  GET /api/teams/:teamId/form
+
+  getTeam form returns an object full of stats for a team to let the user decide their form
+
+  - Team id
+  - Number of matches analyzed
+  - Recent W/D/L sequence
+  - Points & PPG
+  - Goals For / Against / Difference
+  - Clean sheets
+  - Average goals
+*/
+
+export async function getTeamForm(req: Request, res: Response, next: NextFunction) {
+  try {
+    const teamId = Number(req.params.teamId);
+    if (!Number.isFinite(teamId) || teamId <= 0) {
+      return res.status(400).json({ message: "Invalid teamId" });
+    }
+
+    const matchesRaw = Number(req.query.matches ?? 10);
+    const matches = Number.isFinite(matchesRaw) ? Math.min(Math.max(matchesRaw, 1), 50) : 10;
+
+    const form = await teamsService.getTeamForm(teamId, { matches });
+    return res.json(form);
+  } catch (err) {
+    next(err);
+  }
+}
+

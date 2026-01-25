@@ -469,3 +469,119 @@ export async function getTeamMatches(
   };
 }
 
+//The funciton for knowing a teams form, it will query our db and get a list of stats to let the user decide their form
+export async function getTeamForm(teamId: number, opts: { matches: number }) {
+  // 1) Load team to get external_team_id
+  const teamRes = await pool.query<TeamRow>(
+    `
+    SELECT id, external_team_id, name
+    FROM teams
+    WHERE id = $1
+    `,
+    [teamId]
+  );
+
+  const team = teamRes.rows[0];
+  if (!team) {
+    const err: any = new Error("Team not found");
+    err.status = 404;
+    throw err;
+  }
+
+  const teamExternalId = team.external_team_id;
+
+  // 2) Get last N ended matches
+  const { rows } = await pool.query<{
+    winner: number | null;
+    home_team_external_id: number;
+    away_team_external_id: number;
+    home_score: string | null;
+    away_score: string | null;
+    start_time: string;
+    status_text: string | null;
+    short_status_text: string | null;
+  }>(
+    `
+    SELECT
+      winner,
+      home_team_external_id,
+      away_team_external_id,
+      home_score,
+      away_score,
+      start_time,
+      status_text,
+      short_status_text
+    FROM matches
+    WHERE (home_team_external_id = $1 OR away_team_external_id = $1)
+      AND LOWER(COALESCE(status_text, short_status_text, '')) = 'ended'
+    ORDER BY start_time DESC
+    LIMIT $2
+    `,
+    [teamExternalId, opts.matches]
+  );
+
+  // If team has no ended matches yet
+  if (rows.length === 0) {
+    return {
+      teamId: team.id,
+      matches: 0,
+      form: [] as string[],
+      points: 0,
+      ppg: 0,
+      gf: 0,
+      ga: 0,
+      gd: 0,
+      cleanSheets: 0,
+      avgGoalsFor: 0,
+      avgGoalsAgainst: 0,
+    };
+  }
+
+  // 3) Compute form + stats
+  let points = 0;
+  let gf = 0;
+  let ga = 0;
+  let cleanSheets = 0;
+
+  const form: Array<"W" | "D" | "L"> = [];
+
+  for (const m of rows) {
+    const teamIsHome = m.home_team_external_id === teamExternalId;
+
+    const homeScore = numOrNull(m.home_score);
+    const awayScore = numOrNull(m.away_score);
+
+    // goals for/against (only if scores exist)
+    const goalsFor = teamIsHome ? homeScore : awayScore;
+    const goalsAgainst = teamIsHome ? awayScore : homeScore;
+
+    if (goalsFor != null) gf += goalsFor;
+    if (goalsAgainst != null) ga += goalsAgainst;
+    if (goalsAgainst === 0) cleanSheets += 1;
+
+    const r = getTeamResultForMatch(m, teamExternalId);
+    // since we filtered ended, r should be W/D/L (but keep defensive)
+    if (r) form.push(r);
+
+    if (r === "W") points += 3;
+    else if (r === "D") points += 1;
+  }
+
+  const n = form.length || rows.length;
+  const ppg = n ? points / n : 0;
+
+  return {
+    teamId: team.id,
+    matches: rows.length,
+    form, // newest -> oldest (because we ordered DESC)
+    points,
+    ppg: Number(ppg.toFixed(2)),
+    gf,
+    ga,
+    gd: gf - ga,
+    cleanSheets,
+    avgGoalsFor: Number((gf / n).toFixed(2)),
+    avgGoalsAgainst: Number((ga / n).toFixed(2)),
+  };
+}
+
