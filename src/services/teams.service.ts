@@ -128,6 +128,11 @@ function mapTeamMini(row: {
   };
 }
 
+//*END OF HELPERS--> Helper function above
+
+//!------NEW ENDPOINT------> ListTeams the "/" endpoint
+
+
 /**
  * Returns all teams.
  * Used for the home page team list after login.
@@ -158,6 +163,8 @@ export async function listTeams() {
     imageVersion: t.image_version,
   }));
 }
+
+//!------NEW ENDPOINT------> The teamId summary endpoint
 
 /**
  * Returns a team summary:
@@ -325,9 +332,10 @@ export async function getTeamSummary(
     nextFixtures: nextFixturesRes.rows.map(mapMatch),
   };
 }
+//!------NEW ENDPOINT------> The get team matches endpoint
+
 
 //Get all fixtures for a team logic
-
 export async function getTeamMatches(
   teamId: number,
   opts: { type: "all" | "results" | "fixtures"; limit: number }
@@ -469,7 +477,84 @@ export async function getTeamMatches(
   };
 }
 
-//The funciton for knowing a teams form, it will query our db and get a list of stats to let the user decide their form
+//!--------NEW ENDPOINT-------> Get team form endpoint
+
+/**
+ * Maps a recent vs baseline PPG(points per game) delta into a human readable "form" label
+ *
+ * Why PPG delta?
+ * - Soccer is noisy in small samples.
+ * - Comparing "recent performance" to a longer baseline is more stable than using a slope.
+ *
+ * Thresholds (deltaPPG):
+ * - +0.40 or more  => Strong form  -->  (big improvement)
+ * - +0.15 to +0.39 => Good form   -->   (noticeable improvement)
+ * - -0.14 to +0.14 => Average form  --> (about normal)
+ * - -0.39 to -0.15 => Poor form  -->    (noticeable drop)
+ * - -0.40 or less  => Bad form     -->  (big drop)
+ *
+ */
+function ppgRating(delta: number) {
+  if (delta >= 0.4) return "Strong form";
+  if (delta >= 0.15) return "Good form";
+  if (delta > -0.15) return "Average form";
+  if (delta > -0.4) return "Poor form";
+  return "Bad form";
+}
+
+
+/**
+ * Computes the population standard deviation of an array containing the points gotten for the teams recent N games.
+ *
+ * Used to quantify "volatility" in recent points:
+ * - Stable teams: consistently earning similar points each match
+ * - Volatile teams: big swings (W then L then W...)
+ *
+ * Points per match are usually {0,1,3} so sd is naturally bounded.
+ */
+function stddev(nums: number[]) {
+  if (nums.length === 0) return 0;
+  const mean = nums.reduce((a, b) => a + b, 0) / nums.length; //The sum of all points divided by the lenght the number of games essentially
+  const varr = nums.reduce((acc, v) => acc + (v - mean) ** 2, 0) / nums.length; //Calculating variance
+  return Math.sqrt(varr); //Getting std dev
+}
+
+/**
+ * Converts a points-per-match standard deviation into a simple volatility label.
+ *
+ * These thresholds are chosen to be easy to interpret:
+ * - < 0.60  => Stable (mostly consistent results)
+ * - < 1.10  => Moderate volatility
+ * - >= 1.10 => High volatility (very streaky / unpredictable)
+ *
+ * Since match points are discrete (0/1/3), sd values tend to sit in this range.
+ */
+function volatilityLabel(sd: number) {
+  if (sd < 0.6) return "Stable";
+  if (sd < 1.1) return "Moderate volatility";
+  return "High volatility";
+}
+
+/**
+ * GET /api/teams/:teamId/form?matches=N
+ *
+ * Returns a "form" snapshot for a team!
+ * - Recent W/D/L sequence (newest -> oldest)
+ * - Total points & PPG (points per game)
+ * - Goals for/against, goal difference, clean sheets
+ * - Simple, explainable "form rating" using recent-vs-baseline comparison
+ *
+ * Form rating logic (robust for small samples):
+ * - Recent window: last 5 matches (or fewer if not available)
+ * - Baseline window: the next 10 matches after that (or fallback to overall average)
+ * - deltaPPG = recentPPG - baselinePPG
+ * - We label the delta using ppgRating()
+ *
+ * We also compute:
+ * - volatility: standard deviation of recent match points (0/1/3)
+ * - confirmation: compares deltaPPG with delta goal-difference per match
+ *   (helps detect "results > performance" vs "performance-backed" improvement)
+ */
 export async function getTeamForm(teamId: number, opts: { matches: number }) {
   // 1) Load team to get external_team_id
   const teamRes = await pool.query<TeamRow>(
@@ -490,7 +575,7 @@ export async function getTeamForm(teamId: number, opts: { matches: number }) {
 
   const teamExternalId = team.external_team_id;
 
-  // 2) Get last N ended matches
+  // 2) Get last N ended matches (newest -> oldest)
   const { rows } = await pool.query<{
     winner: number | null;
     home_team_external_id: number;
@@ -520,7 +605,7 @@ export async function getTeamForm(teamId: number, opts: { matches: number }) {
     [teamExternalId, opts.matches]
   );
 
-  // If team has no ended matches yet
+  // If team has no ended matches yet, return an "empty" snapshot
   if (rows.length === 0) {
     return {
       teamId: team.id,
@@ -534,56 +619,142 @@ export async function getTeamForm(teamId: number, opts: { matches: number }) {
       cleanSheets: 0,
       avgGoalsFor: 0,
       avgGoalsAgainst: 0,
+      formRating: null,
     };
   }
 
-  // 3) Compute form + stats
-  let points = 0;
-  let gf = 0;
-  let ga = 0;
-  let cleanSheets = 0;
+  // 3) Convert each match into per-match stats type
+  type PerMatch = {
+    points: number;
+    gf: number;
+    ga: number;
+    gd: number;
+    result: "W" | "D" | "L";
+  };
 
-  const form: Array<"W" | "D" | "L"> = [];
+  const perMatch: PerMatch[] = []; //Array that holds perMatch types
 
   for (const m of rows) {
     const teamIsHome = m.home_team_external_id === teamExternalId;
 
-    const homeScore = numOrNull(m.home_score);
-    const awayScore = numOrNull(m.away_score);
+    // If DB has null scores for an ended match, treat as 0 to keep calculations safe.
+    const homeScore = numOrNull(m.home_score) ?? 0;
+    const awayScore = numOrNull(m.away_score) ?? 0;
 
-    // goals for/against (only if scores exist)
-    const goalsFor = teamIsHome ? homeScore : awayScore;
-    const goalsAgainst = teamIsHome ? awayScore : homeScore;
-
-    if (goalsFor != null) gf += goalsFor;
-    if (goalsAgainst != null) ga += goalsAgainst;
-    if (goalsAgainst === 0) cleanSheets += 1;
+    const gf = teamIsHome ? homeScore : awayScore;
+    const ga = teamIsHome ? awayScore : homeScore;
+    const gd = gf - ga;
 
     const r = getTeamResultForMatch(m, teamExternalId);
-    // since we filtered ended, r should be W/D/L (but keep defensive)
-    if (r) form.push(r);
+    if (!r) continue; // defensive: should not happen for ended matches
 
-    if (r === "W") points += 3;
-    else if (r === "D") points += 1;
+    const points = r === "W" ? 3 : r === "D" ? 1 : 0;
+
+    perMatch.push({ points, gf, ga, gd, result: r });
   }
 
-  const n = form.length || rows.length;
-  const ppg = n ? points / n : 0;
+  // If something weird happened and we couldn't compute results
+  if (perMatch.length === 0) {
+    return {
+      teamId: team.id,
+      matches: rows.length,
+      form: [] as string[],
+      points: 0,
+      ppg: 0,
+      gf: 0,
+      ga: 0,
+      gd: 0,
+      cleanSheets: 0,
+      avgGoalsFor: 0,
+      avgGoalsAgainst: 0,
+      formRating: null,
+    };
+  }
 
+  // 4) Overall aggregates across requested matches
+  const points = perMatch.reduce((a, x) => a + x.points, 0);
+  const gf = perMatch.reduce((a, x) => a + x.gf, 0);
+  const ga = perMatch.reduce((a, x) => a + x.ga, 0);
+  const gd = gf - ga;
+
+  const n = perMatch.length;
+  const ppg = points / n;
+
+  const cleanSheets = perMatch.reduce((a, x) => a + (x.ga === 0 ? 1 : 0), 0);
+
+  // W/D/L sequence (newest -> oldest)
+  const form = perMatch.map((x) => x.result);
+
+  // 5) Recent vs baseline split-window comparison 
+  const RECENT_N = Math.min(5, n);
+  const BASELINE_N = Math.min(10, Math.max(0, n - RECENT_N));
+
+  const recent = perMatch.slice(0, RECENT_N);
+  const baseline = perMatch.slice(RECENT_N, RECENT_N + BASELINE_N);
+
+  const recentPoints = recent.reduce((a, x) => a + x.points, 0);
+  const recentPPG = RECENT_N ? recentPoints / RECENT_N : 0;
+  const recentGDPM = RECENT_N ? recent.reduce((a, x) => a + x.gd, 0) / RECENT_N : 0;
+
+  // If we don't have enough baseline matches, fall back to overall average
+  const baselinePPG =
+    baseline.length > 0 ? baseline.reduce((a, x) => a + x.points, 0) / baseline.length : ppg;
+
+  const baselineGDPM =
+    baseline.length > 0 ? baseline.reduce((a, x) => a + x.gd, 0) / baseline.length : gd / n;
+
+  const deltaPPG = recentPPG - baselinePPG;
+
+  // Volatility based on recent points (0/1/3)
+  const recentStd = stddev(recent.map((x) => x.points));
+
+  // Confirmation using goal-difference per match (helps detect "lucky" vs "real" improvement)
+  const deltaGDPM = recentGDPM - baselineGDPM;
+  const confirmation =
+    deltaPPG > 0 && deltaGDPM < 0
+      ? "Results > performance"
+      : deltaPPG > 0 && deltaGDPM >= 0
+      ? "Performance-backed"
+      : deltaPPG < 0 && deltaGDPM < 0
+      ? "Consistently struggling"
+      : "Mixed";
+
+  // 6) Final API response
   return {
     teamId: team.id,
-    matches: rows.length,
-    form, // newest -> oldest (because we ordered DESC)
+    matches: n,
+
+    // raw descriptive stats
+    form,
     points,
     ppg: Number(ppg.toFixed(2)),
     gf,
     ga,
-    gd: gf - ga,
+    gd,
     cleanSheets,
     avgGoalsFor: Number((gf / n).toFixed(2)),
     avgGoalsAgainst: Number((ga / n).toFixed(2)),
+
+    // interpretive "form rating"
+    formRating: {
+      recentMatches: RECENT_N,
+      baselineMatches: baseline.length || n,
+      recentPPG: Number(recentPPG.toFixed(2)),
+      baselinePPG: Number(baselinePPG.toFixed(2)),
+      deltaPPG: Number(deltaPPG.toFixed(2)),
+      rating: ppgRating(deltaPPG),
+      volatility: {
+        recentPointsStd: Number(recentStd.toFixed(2)),
+        label: volatilityLabel(recentStd),
+      },
+      confirmation,
+      deltaGDPerMatch: Number(deltaGDPM.toFixed(2)),
+    },
   };
 }
+
+//!---NEW ENDPOINT------> Get trends endpoint
+
 
 /**
  * Computes rolling "trend" metrics for a team based on recent finished matches.
