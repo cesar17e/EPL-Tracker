@@ -164,4 +164,59 @@ export async function getTeamTrends(req: Request, res: Response, next: NextFunct
   }
 }
 
+/**
+ * GET /api/teams/:teamId/fixture-difficulty
+ *
+ * Computes difficulty for the next N upcoming fixtures, based on opponent strength.
+ *
+ * Query params:
+ * - fixtures: number (default 3) --> how many upcoming fixtures to evaluate
+ * - oppMatches: number (default 15) --> opponent baseline window size (ended matches)
+ * - recentOppMatches: number (default 5) --> opponent recent window size
+ * - alpha: number (default 0.4) --> momentum weight in [0,1]
+ */
+export async function getTeamFixtureDifficulty(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+
+    //Just getting the query params if any
+    const teamId = Number(req.params.teamId);
+    if (!Number.isFinite(teamId) || teamId <= 0) {
+      return res.status(400).json({ message: "Invalid teamId" });
+    }
+
+    const fixturesRaw = Number(req.query.fixtures ?? 3);
+    const fixtures = Number.isFinite(fixturesRaw)
+      ? Math.min(Math.max(fixturesRaw, 1), 10)
+      : 3;
+
+    const oppMatchesRaw = Number(req.query.oppMatches ?? 15);
+    const oppMatches = Number.isFinite(oppMatchesRaw)
+      ? Math.min(Math.max(oppMatchesRaw, 5), 50) //bound it
+      : 15; //default to 15
+
+    const recentOppMatchesRaw = Number(req.query.recentOppMatches ?? 5);
+    const recentOppMatches = Number.isFinite(recentOppMatchesRaw)
+      ? Math.min(Math.max(recentOppMatchesRaw, 3), 10)
+      : 5;
+
+    const alphaRaw = Number(req.query.alpha ?? 0.4);
+    const alpha = Number.isFinite(alphaRaw) ? Math.min(Math.max(alphaRaw, 0), 1) : 0.4;
+
+    //Call the function from service
+    const data = await teamsService.getTeamFixtureDifficulty(teamId, {
+      fixtures,
+      oppMatches,
+      recentOppMatches,
+      alpha,
+    });
+
+    return res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
 

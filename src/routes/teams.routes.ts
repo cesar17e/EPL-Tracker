@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/requireAuth.js";
-import { listTeams, getTeamSummary, getTeamMatches, getTeamForm, getTeamTrends } from "../controllers/teams.controller.js";
+import { listTeams, getTeamSummary, getTeamMatches, getTeamForm, getTeamTrends, getTeamFixtureDifficulty } from "../controllers/teams.controller.js";
 import rateLimiter from "../middleware/rateLimiter.js";
 
 //Prefix api/teams/-->
@@ -26,5 +26,10 @@ router.get("/:teamId/form", requireAuth, rateLimiter, getTeamForm);
 //Example --> /api/teams/:teamId/form?matches=N&window=M
 //Alows us to see how form changes through time
 router.get("/:teamId/trends", requireAuth, rateLimiter, getTeamTrends);
+
+//Fixture difficulty (next N fixtures scored by opponent strength)
+router.get("/:teamId/fixture-difficulty",requireAuth, getTeamFixtureDifficulty);
+  
+  
 
 export default router;

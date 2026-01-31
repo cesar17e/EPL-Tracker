@@ -923,3 +923,352 @@ export async function getTeamTrends(
   };
 }
 
+
+//!---NEW ENDPOINT------> Get team fixture difficulty for the next N games, (fixtures scored by opponent strength)
+
+//*---------Helpers-----------
+
+//Sets bounds for parameters
+function clamp(n: number, lo: number, hi: number) {
+  return Math.min(Math.max(n, lo), hi);
+}
+
+//Labels the difficulty of a numeric ppg value
+function labelDifficulty(score: number): "Easy" | "Medium" | "Hard" {
+  if (score < 1.2) return "Easy";
+  if (score < 1.55) return "Medium";
+  return "Hard";
+}
+
+function safeDivide(a: number, b: number) {
+  return b === 0 ? 0 : a / b;
+}
+
+function pointsFromWinnerPerspective(
+  winner: number | null,
+  homeExternalId: number,
+  awayExternalId: number,
+  teamExternalId: number
+): number | null {
+  if (winner == null) return null;
+
+  // draw
+  if (winner === 0) return 1;
+
+  const teamIsHome = homeExternalId === teamExternalId;
+  if (winner === 1) return teamIsHome ? 3 : 0; // home won
+  if (winner === 2) return teamIsHome ? 0 : 3; // away won
+  return null;
+}
+
+/**
+ * Compute opponent PPG over last `limit` ended matches.
+ * Returns { ppg, matches } where matches may be < limit if not enough data.
+ */
+async function getTeamPpgFromLastEndedMatches(
+  teamExternalId: number,
+  limit: number
+): Promise<{ ppg: number; matches: number }> {
+  const { rows } = await pool.query<{
+    winner: number | null;
+    home_team_external_id: number;
+    away_team_external_id: number;
+    start_time: string;
+    status_text: string | null;
+    short_status_text: string | null;
+  }>(
+    `
+    SELECT
+      winner,
+      home_team_external_id,
+      away_team_external_id,
+      start_time,
+      status_text,
+      short_status_text
+    FROM matches
+    WHERE (home_team_external_id = $1 OR away_team_external_id = $1)
+      AND LOWER(COALESCE(status_text, short_status_text, '')) = 'ended'
+    ORDER BY start_time DESC
+    LIMIT $2
+    `,
+    [teamExternalId, limit]
+  );
+
+  if (rows.length === 0) return { ppg: 0, matches: 0 };
+
+  let points = 0;
+  let counted = 0;
+
+  for (const m of rows) {
+    const p = pointsFromWinnerPerspective(
+      m.winner,
+      m.home_team_external_id,
+      m.away_team_external_id,
+      teamExternalId
+    );
+    if (p == null) continue;
+    points += p;
+    counted++;
+  }
+
+  const ppg = safeDivide(points, counted);
+  return { ppg: Number(ppg.toFixed(2)), matches: counted };
+}
+
+//*---------End of Helpers-----------
+
+//*----------Main Function for the endpoint---------
+
+/**
+ * Computes fixture difficulty for the next N fixtures based on opponent strength.
+ *
+ * Opponent strength model:
+ *   oppStrength = baselinePPG + alpha * (recentPPG - baselinePPG)
+ *
+ * Home/Away adjustment (ON by default):
+ *   - Home --> slightly easier (factor < 1)
+ *   - Away --> slightly harder (factor > 1)
+ */
+export async function getTeamFixtureDifficulty(
+  teamId: number,
+  opts: {
+    fixtures: number;
+    oppMatches: number;
+    recentOppMatches: number;
+    alpha: number;
+    homeAway?: {
+      enabled?: boolean;
+      homeFactor?: number;
+      awayFactor?: number;
+    };
+  }
+) {
+
+  // 0) Clamp & normalize inputs
+  const fixtures = clamp(opts.fixtures, 1, 10);
+  const oppMatches = clamp(opts.oppMatches, 5, 50);
+  const recentOppMatches = clamp(opts.recentOppMatches, 3, 10);
+  const alpha = clamp(opts.alpha, 0, 1);
+
+  // Home/Away logic is ON by default
+  const homeAwayEnabled = opts.homeAway?.enabled ?? true;
+
+  const homeFactor = homeAwayEnabled
+    ? clamp(opts.homeAway?.homeFactor ?? 0.95, 0.8, 1.2)
+    : 1; //0.95 is the default home facotr
+
+  const awayFactor = homeAwayEnabled
+    ? clamp(opts.homeAway?.awayFactor ?? 1.05, 0.8, 1.2) 
+    : 1; //1.05 is the default away factor
+
+  // 1) Load team
+  const teamRes = await pool.query<{
+    id: number;
+    external_team_id: number;
+    name: string;
+    short_name: string | null;
+    color: string | null;
+    away_color: string | null;
+    image_version: number | null;
+  }>(
+    `
+    SELECT id, external_team_id, name, short_name, color, away_color, image_version
+    FROM teams
+    WHERE id = $1
+    `,
+    [teamId]
+  );
+
+  const team = teamRes.rows[0];
+  if (!team) {
+    const err: any = new Error("Team not found");
+    err.status = 404;
+    throw err;
+  }
+
+  const teamExternalId = team.external_team_id; //get our teams external id
+
+  // 2) Fetch N upcoming fixtures
+  const fixturesRes = await pool.query<{
+    id: number;
+    external_game_id: number;
+    start_time: string;
+    status_text: string | null;
+    short_status_text: string | null;
+    home_team_external_id: number;
+    away_team_external_id: number;
+
+    home_team_id: number | null;
+    home_team_name: string | null;
+    home_team_short_name: string | null;
+
+    away_team_id: number | null;
+    away_team_name: string | null;
+    away_team_short_name: string | null;
+  }>(
+    `
+    SELECT
+      m.id,
+      m.external_game_id,
+      m.start_time,
+      m.status_text,
+      m.short_status_text,
+      m.home_team_external_id,
+      m.away_team_external_id,
+
+      th.id AS home_team_id,
+      th.name AS home_team_name,
+      th.short_name AS home_team_short_name,
+
+      ta.id AS away_team_id,
+      ta.name AS away_team_name,
+      ta.short_name AS away_team_short_name
+    FROM matches m
+    LEFT JOIN teams th ON th.external_team_id = m.home_team_external_id
+    LEFT JOIN teams ta ON ta.external_team_id = m.away_team_external_id
+    WHERE (m.home_team_external_id = $1 OR m.away_team_external_id = $1)
+      AND LOWER(COALESCE(m.status_text, m.short_status_text, '')) <> 'ended'
+      AND m.start_time > now()
+    ORDER BY m.start_time ASC
+    LIMIT $2
+    `,
+    [teamExternalId, fixtures]
+  );
+  //So we got the n upcoming mathces bascially for the fixed team were looking up
+
+  // 3) Compute difficulty per fixture
+  const cache = new Map<
+    number,
+    {
+      baselinePPG: number;
+      baselineMatches: number;
+      recentPPG: number;
+      recentMatches: number;
+    }
+  >();
+
+  /*
+  Each element in this items array corresponds to one upcoming fixture and includes:
+    Match metadata --> (when, home/away)
+    Opponent identity
+    Opponent strength inputs
+    Computed difficulty score
+    Human-readable difficulty label
+  */
+  const items: any[] = [];
+  
+  //These two vars will correspond to overall run of N games difficulty
+  let sumDifficulty = 0;
+  let counted = 0;
+
+
+  //Loop over all matches coming up
+  for (const f of fixturesRes.rows) { 
+    const teamIsHome = f.home_team_external_id === teamExternalId; //is our team home or away
+
+    //Get the opponent id based off of home or away
+    const opponentExternalId = teamIsHome
+      ? f.away_team_external_id
+      : f.home_team_external_id;
+
+    //Make an object for the opponent based on if their away or home
+    const opponent = teamIsHome
+      ? { id: f.away_team_id, name: f.away_team_name, shortName: f.away_team_short_name }
+      : { id: f.home_team_id, name: f.home_team_name, shortName: f.home_team_short_name };
+
+    // Compute opponent stats (cached)
+    let opp = cache.get(opponentExternalId);
+    if (!opp) {
+      //Get the opponents ppg from recent vs baseline set of games
+      const baseline = await getTeamPpgFromLastEndedMatches(opponentExternalId, oppMatches);
+      const recent = await getTeamPpgFromLastEndedMatches(opponentExternalId, recentOppMatches);
+
+      opp = {
+        baselinePPG: baseline.ppg,
+        baselineMatches: baseline.matches,
+        recentPPG: recent.ppg,
+        recentMatches: recent.matches,
+      };
+
+      cache.set(opponentExternalId, opp);
+    }
+
+    
+    const deltaPPG = opp.recentPPG - opp.baselinePPG;
+
+    //The teams strength is their baseline plus a correction based on recent form with scaling momentum constant of alpha
+    const oppStrengthRaw = opp.baselinePPG + (alpha * deltaPPG);
+    
+    //Now we take into account if our team is home or away, if were home we get a boost of *1.05 or were away we get a decay of *0.95
+    const venueFactor = teamIsHome ? homeFactor : awayFactor;
+    const fixtureDifficulty = Number((oppStrengthRaw * venueFactor).toFixed(2));
+
+    //We now label this fixtureDifficulty, easy, med, hard
+    const fixtureLabel = labelDifficulty(fixtureDifficulty);
+
+    sumDifficulty += fixtureDifficulty;
+    counted++;
+
+    items.push({
+      match: {
+        id: f.id,
+        externalGameId: f.external_game_id,
+        startTime: f.start_time,
+        homeAway: teamIsHome ? "H" : "A",
+      },
+      opponent: opponent?.id
+        ? {
+            id: opponent.id,
+            name: opponent.name,
+            shortName: opponent.shortName,
+          }
+        : null,
+      opponentMetrics: {
+        baselinePPG: opp.baselinePPG,
+        baselineMatches: opp.baselineMatches,
+        recentPPG: opp.recentPPG,
+        recentMatches: opp.recentMatches,
+        deltaPPG: Number(deltaPPG.toFixed(2)),
+        alpha,
+        oppStrength: Number(oppStrengthRaw.toFixed(2)),
+      },
+      fixtureDifficulty,
+      fixtureLabel
+    });
+  }
+
+  //Overall run difficulty
+  const runDifficulty = counted
+    ? Number((sumDifficulty / counted).toFixed(2))
+    : 0;
+
+  // 4) Final response return an array our team, the params used, the overall run difficulty and the items array cotntaining stats about that current game difficulty
+  return {
+    team: {
+      id: team.id,
+      externalTeamId: team.external_team_id,
+      name: team.name,
+      shortName: team.short_name,
+      color: team.color,
+      awayColor: team.away_color,
+      imageVersion: team.image_version,
+    },
+    params: {
+      fixtures,
+      oppMatches,
+      recentOppMatches,
+      alpha,
+      homeAway: {
+        enabled: homeAwayEnabled,
+        homeFactor,
+        awayFactor,
+      },
+    },
+    run: {
+      difficultyScore: runDifficulty,
+      label: labelDifficulty(runDifficulty),
+      countedFixtures: counted,
+    },
+    items,
+  };
+}
