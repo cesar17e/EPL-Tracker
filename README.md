@@ -45,7 +45,9 @@ As a **Computer Science + Mathematics major**, the goal was to:
 **Refresh-token rotation & cookie-based auth**
 
 
-![Auth Refresh Cookie](docs/images/auth-refresh-cookie.png)
+<p align="center">
+  <img src="docs/images/auth-refresh-cookie.png" width="600" />
+</p>
 
 
 ---
@@ -64,8 +66,10 @@ Core data exposed:
 - Upcoming fixtures  
 - Opponent context (home/away, perspective-based result)  
 
-![Team Summary Dashboard](docs/images/team-summary.png)
 
+<p align="center">
+  <img src="docs/images/team-summary.png" width="750" />
+</p>
 
 ---
 
@@ -105,9 +109,11 @@ This produces time-series data showing whether a team is:
 - Stagnating  
 - Declining  
 
-```markdown
-![Rolling Trends](docs/images/trends-rolling-window.png)
-```
+<p align="center">
+  <img src="docs/images/trends-rolling-window.png" width="750" />
+</p>
+
+
 
 ---
 
@@ -131,12 +137,15 @@ short-term signals are informative but noisy.
 Produces:
 
 - Per-fixture difficulty  
-- Overall short-term outlook  
+- Overall short-term outlook
 
-```markdown
-![Fixture Difficulty Breakdown](docs/images/fixture-difficulty-breakdown.png)
-![Fixture Difficulty Summary](docs/images/fixture-difficulty-summary.png)
-```
+<p align="center">
+  <img src="docs/images/fixture-difficulty-breakdown.png" width="700" />
+</p>
+<p align="center">
+  <img src="docs/images/fixture-difficulty-summary.png" width="700" />
+</p>
+
 
 ---
 
@@ -163,9 +172,9 @@ Production design:
 - Uses Postgres advisory locks  
 - Sunday-only + rate limited  
 
-
-![Admin Sync](docs/images/admin-sync.png)
-
+<p align="center">
+  <img src="docs/images/admin-sync.png" width="650" />
+</p>
 
 ---
 
