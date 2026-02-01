@@ -16,7 +16,7 @@ app.set("trust proxy", 1); //for render
 // For now (Postman testing will do)
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
+    origin: process.env.FRONTEND_ORIGIN || "http://localhost:8000",
     credentials: true,
   })
 );
