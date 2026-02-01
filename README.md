@@ -15,7 +15,7 @@ A frontend and automated scheduling (cron / job queues) are planned future exten
 Most sports apps either:
 
 - Dump raw data  
-- Present opaque predictions with no explanation  
+- Present predictions with no explanation  
 
 PremTracker aims to sit in the middle:
 
@@ -44,9 +44,9 @@ As a **Computer Science + Mathematics major**, the goal was to:
 
 **Refresh-token rotation & cookie-based auth**
 
-```markdown
+
 ![Auth Refresh Cookie](docs/images/auth-refresh-cookie.png)
-```
+
 
 ---
 
@@ -64,9 +64,8 @@ Core data exposed:
 - Upcoming fixtures  
 - Opponent context (home/away, perspective-based result)  
 
-```markdown
 ![Team Summary Dashboard](docs/images/team-summary.png)
-```
+
 
 ---
 
@@ -164,9 +163,9 @@ Production design:
 - Uses Postgres advisory locks  
 - Sunday-only + rate limited  
 
-```markdown
+
 ![Admin Sync](docs/images/admin-sync.png)
-```
+
 
 ---
 
@@ -264,7 +263,7 @@ POST /api/admin/sync-games
 
 ---
 
-## Why This Project Matters
+## Overall
 
 PremTracker isn’t about predicting match results.
 
@@ -272,5 +271,4 @@ It’s about:
 
 - Building systems  
 - Modeling uncertainty responsibly  
-- Using math to inform, not obscure  
-- Writing backend code that could survive production  
+- Using math to inform users
