@@ -13,7 +13,8 @@ router.post("/login", rateLimiter, login);
 //Refresh logic for tokens
 router.post("/refresh", rateLimiter, refresh);
 router.post("/logout", rateLimiter, logout);
-router.get("/verify-email", verifyEmail); //called when auto register a  link click 
+ //This will be called when they click the verificaiton link send to their email
+router.get("/verify-email", verifyEmail);
 router.post("/request-verify", requireAuth, rateLimiter, requestVerify); // resend link
 
 // Example protected route to test access token:
