@@ -240,6 +240,7 @@ POST /api/admin/sync-games
 
 
 ### Repository Structure
+
 src/
 ├── controllers/        # HTTP request/response handling
 ├── services/           # Business logic, analytics, DB queries
