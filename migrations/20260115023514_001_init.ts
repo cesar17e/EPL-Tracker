@@ -1,164 +1,188 @@
-
+// migrations/202602010001_init_schema.ts
 import type { Knex } from "knex";
 
+/**
+ * Baseline schema migration (Postgres / Neon).
+ *
+ * This recreates the application tables:
+ * - users
+ * - competitions
+ * - teams
+ * - matches
+ * - refresh_tokens
+ * - email_verification_tokens
+ * - user_favorite_teams
+ *
+ */
 export async function up(knex: Knex): Promise<void> {
-  await knex.raw(`
-    CREATE TABLE IF NOT EXISTS users (
-      id BIGSERIAL PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      time_zone TEXT NOT NULL DEFAULT 'America/New_York',
-      email_opt_in BOOLEAN NOT NULL DEFAULT true,
-      email_verified BOOLEAN NOT NULL DEFAULT false,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
+  // --- users ---
+  await knex.schema.createTable("users", (t) => {
+    t.bigIncrements("id").primary();
 
-    CREATE TABLE IF NOT EXISTS email_verification_tokens (
-      id BIGSERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      token_hash TEXT NOT NULL,
-      expires_at TIMESTAMPTZ NOT NULL,
-      used_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
+    t.text("email").notNullable().unique();
+    t.text("password_hash").notNullable();
 
-    CREATE INDEX IF NOT EXISTS idx_email_tokens_user
-      ON email_verification_tokens(user_id);
+    t.boolean("email_verified").notNullable().defaultTo(false);
+    t.boolean("email_opt_in").notNullable().defaultTo(false);
 
-    CREATE TABLE IF NOT EXISTS refresh_tokens (
-      id BIGSERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      token_hash TEXT NOT NULL,
-      expires_at TIMESTAMPTZ NOT NULL,
-      revoked_at TIMESTAMPTZ,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
+    t.text("time_zone").notNullable().defaultTo("America/New_York");
+    t.boolean("is_admin").notNullable().defaultTo(false);
 
-    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
-    CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash
-    
+    t.timestamp("created_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+    t.timestamp("updated_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+  });
 
-  `);
+  // Helpful index (you already also have a unique index on email; keeping this matches your schema list)
+  await knex.schema.raw(`CREATE INDEX IF NOT EXISTS idx_users_email ON public.users USING btree (email)`);
+
+  // --- competitions ---
+  await knex.schema.createTable("competitions", (t) => {
+    t.bigIncrements("id").primary();
+
+    t.bigInteger("external_competition_id").notNullable().unique();
+    t.text("name").notNullable();
+
+    t.bigInteger("country_id").nullable();
+    t.bigInteger("sport_id").nullable().defaultTo(1);
+
+    t.text("name_for_url").nullable();
+    t.integer("image_version").nullable();
+
+    t.integer("current_season_num").nullable();
+    t.integer("current_stage_num").nullable();
+
+    t.boolean("is_active").nullable().defaultTo(true);
+
+    t.timestamp("created_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+    t.timestamp("updated_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+  });
+
+  // --- teams ---
+  await knex.schema.createTable("teams", (t) => {
+    t.bigIncrements("id").primary();
+
+    t.bigInteger("external_team_id").notNullable().unique();
+    t.text("name").notNullable();
+
+    t.text("short_name").nullable();
+    t.text("symbolic_name").nullable();
+
+    t.bigInteger("country_id").nullable();
+    t.bigInteger("sport_id").nullable().defaultTo(1);
+
+    // Postgres smallint
+    t.specificType("type", "smallint").nullable();
+
+    t.text("color").nullable();
+    t.text("away_color").nullable();
+
+    t.text("name_for_url").nullable();
+    t.bigInteger("popularity_rank").nullable();
+
+    t.bigInteger("main_competition_external_id").nullable();
+
+    t.integer("image_version").nullable();
+
+    t.timestamp("created_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+    t.timestamp("updated_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+  });
+
+  await knex.schema.raw(`CREATE INDEX IF NOT EXISTS idx_teams_name ON public.teams USING btree (name)`);
+
+  // --- matches ---
+  await knex.schema.createTable("matches", (t) => {
+    t.bigIncrements("id").primary();
+
+    t.bigInteger("external_game_id").notNullable().unique();
+    t.bigInteger("external_competition_id").notNullable();
+
+    t.integer("season_num").nullable();
+    t.integer("stage_num").nullable();
+    t.integer("group_num").nullable();
+
+    t.text("round_name").nullable();
+    t.text("group_name").nullable();
+
+    t.timestamp("start_time", { useTz: true }).notNullable();
+
+    t.specificType("status_group", "smallint").notNullable();
+    t.text("status_text").nullable();
+    t.text("short_status_text").nullable();
+
+    t.bigInteger("home_team_external_id").notNullable();
+    t.bigInteger("away_team_external_id").notNullable();
+
+    // numeric without fixed precision/scale
+    t.specificType("home_score", "numeric").nullable();
+    t.specificType("away_score", "numeric").nullable();
+
+    t.specificType("winner", "smallint").nullable();
+
+    t.boolean("has_lineups").nullable();
+    t.boolean("has_stats").nullable();
+    t.boolean("has_news").nullable();
+
+    t.timestamp("created_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+    t.timestamp("updated_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+  });
+
+  await knex.schema.raw(`CREATE INDEX IF NOT EXISTS idx_matches_away_team ON public.matches USING btree (away_team_external_id)`);
+  await knex.schema.raw(`CREATE INDEX IF NOT EXISTS idx_matches_competition ON public.matches USING btree (external_competition_id)`);
+  await knex.schema.raw(`CREATE INDEX IF NOT EXISTS idx_matches_home_team ON public.matches USING btree (home_team_external_id)`);
+  await knex.schema.raw(`CREATE INDEX IF NOT EXISTS idx_matches_start_time ON public.matches USING btree (start_time)`);
+
+  // --- refresh_tokens ---
+  await knex.schema.createTable("refresh_tokens", (t) => {
+    t.bigIncrements("id").primary();
+
+    t.bigInteger("user_id").notNullable().references("id").inTable("users").onDelete("CASCADE");
+    t.text("token_hash").notNullable();
+
+    t.timestamp("expires_at", { useTz: true }).notNullable();
+    t.timestamp("revoked_at", { useTz: true }).nullable();
+
+    t.timestamp("created_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+  });
+
+  await knex.schema.raw(`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON public.refresh_tokens USING btree (token_hash)`);
+  await knex.schema.raw(`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON public.refresh_tokens USING btree (user_id)`);
+
+  // --- email_verification_tokens ---
+  await knex.schema.createTable("email_verification_tokens", (t) => {
+    t.bigIncrements("id").primary();
+
+    t.bigInteger("user_id").notNullable().references("id").inTable("users").onDelete("CASCADE");
+
+    t.text("token_hash").notNullable().unique();
+
+    t.timestamp("expires_at", { useTz: true }).notNullable();
+    t.timestamp("used_at", { useTz: true }).nullable();
+
+    t.timestamp("created_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+  });
+
+  await knex.schema.raw(`CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_expires ON public.email_verification_tokens USING btree (expires_at)`);
+  await knex.schema.raw(`CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user ON public.email_verification_tokens USING btree (user_id)`);
+
+  // --- user_favorite_teams ---
+  await knex.schema.createTable("user_favorite_teams", (t) => {
+    t.bigInteger("user_id").notNullable().references("id").inTable("users").onDelete("CASCADE");
+    t.bigInteger("team_id").notNullable().references("id").inTable("teams").onDelete("CASCADE");
+
+    t.timestamp("created_at", { useTz: true }).notNullable().defaultTo(knex.fn.now());
+
+    // Composite PK = unique (user_id, team_id)
+    t.primary(["user_id", "team_id"]);
+  });
 }
 
 export async function down(knex: Knex): Promise<void> {
-  await knex.raw(`
-    DROP TABLE IF EXISTS email_verification_tokens;
-    DROP TABLE IF EXISTS users;
-    DROP TABLE IF EXISTS refresh_tokens;
-
-  `);
+  // Drop in reverse dependency order
+  await knex.schema.dropTableIfExists("user_favorite_teams");
+  await knex.schema.dropTableIfExists("email_verification_tokens");
+  await knex.schema.dropTableIfExists("refresh_tokens");
+  await knex.schema.dropTableIfExists("matches");
+  await knex.schema.dropTableIfExists("teams");
+  await knex.schema.dropTableIfExists("competitions");
+  await knex.schema.dropTableIfExists("users");
 }
-
-/*
-
--- 1) Competitions we track (Premier League, later UCL, etc.)
-CREATE TABLE IF NOT EXISTS competitions (
-  id BIGSERIAL PRIMARY KEY,
-  external_competition_id BIGINT NOT NULL UNIQUE,  -- e.g. Premier League = 7
-  name TEXT NOT NULL,
-  country_id BIGINT,
-  sport_id BIGINT DEFAULT 1,
-  name_for_url TEXT,
-  image_version INT,
-  current_season_num INT,
-  current_stage_num INT,
-  is_active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- 2) Teams/competitors
-CREATE TABLE IF NOT EXISTS teams (
-  id BIGSERIAL PRIMARY KEY,
-  external_team_id BIGINT NOT NULL UNIQUE,         -- competitor.id
-  name TEXT NOT NULL,
-  short_name TEXT,
-  symbolic_name TEXT,
-  country_id BIGINT,
-  sport_id BIGINT DEFAULT 1,
-  type SMALLINT,                                   -- 1=club, 2=national
-  color TEXT,
-  away_color TEXT,
-  image_version INT,
-  name_for_url TEXT,
-  popularity_rank BIGINT,
-  main_competition_external_id BIGINT,             -- from API if present
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS idx_teams_name ON teams (name);
-
--- 3) Matches/games (fixtures + results)
-CREATE TABLE IF NOT EXISTS matches (
-  id BIGSERIAL PRIMARY KEY,
-  external_game_id BIGINT NOT NULL UNIQUE,         -- game.id
-  external_competition_id BIGINT NOT NULL,         -- game.competitionId
-  season_num INT,
-  stage_num INT,
-  group_num INT,
-  round_name TEXT,
-  group_name TEXT,
-
-  start_time TIMESTAMPTZ NOT NULL,
-
-  status_group SMALLINT NOT NULL,                  -- 1 scheduled, 2 live, 3 finished, 4 postponed, 5 cancelled
-  status_text TEXT,
-  short_status_text TEXT,
-
-  home_team_external_id BIGINT NOT NULL,
-  away_team_external_id BIGINT NOT NULL,
-
-  home_score NUMERIC,                              -- API uses 0.0 sometimes
-  away_score NUMERIC,
-  winner SMALLINT,                                 -- 0 none, 1 home, 2 away
-
-  has_lineups BOOLEAN,
-  has_stats BOOLEAN,
-  has_news BOOLEAN,
-
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-
-  CONSTRAINT chk_status_group CHECK (status_group IN (1,2,3,4,5)),
-  CONSTRAINT chk_winner CHECK (winner IS NULL OR winner IN (0,1,2))
-);
-
-CREATE INDEX IF NOT EXISTS idx_matches_start_time ON matches (start_time);
-CREATE INDEX IF NOT EXISTS idx_matches_competition ON matches (external_competition_id);
-CREATE INDEX IF NOT EXISTS idx_matches_home_team ON matches (home_team_external_id);
-CREATE INDEX IF NOT EXISTS idx_matches_away_team ON matches (away_team_external_id);
-
--- Optional: speed up team schedule queries
-CREATE INDEX IF NOT EXISTS idx_matches_team_time ON matches (home_team_external_id, start_time);
-CREATE INDEX IF NOT EXISTS idx_matches_team_time2 ON matches (away_team_external_id, start_time);
-
--- 4) User favorites (many-to-many)
-CREATE TABLE IF NOT EXISTS user_favorite_teams (
-  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  team_id BIGINT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, team_id)
-);
-
--- 5) Track sync runs (helps for UI + debugging)
-CREATE TABLE IF NOT EXISTS sync_runs (
-  id BIGSERIAL PRIMARY KEY,
-  source TEXT NOT NULL DEFAULT 'sportsapipro',
-  external_competition_id BIGINT NOT NULL,
-  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  finished_at TIMESTAMPTZ,
-  status TEXT NOT NULL DEFAULT 'running',           -- running/success/error
-  message TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_sync_runs_comp ON sync_runs (external_competition_id, started_at DESC);
-
-
-
-*/
-
-
-
-
