@@ -238,6 +238,36 @@ POST /api/admin/sync-games
 - Indexed match lookups  
 - Service/controller separation  
 
+
+### Repository Structure
+src/
+├── controllers/        # HTTP request/response handling
+├── services/           # Business logic, analytics, DB queries
+├── routes/             # Express route definitions
+├── middleware/         # Auth, rate limits, admin guards
+├── scripts/            # One-off & admin sync jobs
+├── db/                 # Postgres pool & shared DB types
+├── utils/              # Tokens, cookies, helpers
+├── config/             # External services (Redis, etc.)
+├── server.ts           # Express app entry point
+
+Design principle:
+> Controllers stay thin, services hold logic, scripts are isolated from HTTP.
+
+---
+
+### Running Locally
+npm install
+npm run migrate:latest
+npm run dev
+
+### Minimal Environment Variables
+DATABASE_URL=postgres://...
+JWT_SECRET=...
+REFRESH_TOKEN_SECRET=...
+SPORTS_API_KEY=...
+EMAIL_MODE=demo // logs emails instead of sending them.
+
 ---
 
 ## Demo vs Production
