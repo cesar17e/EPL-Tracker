@@ -142,11 +142,6 @@ Produces:
 <p align="center">
   <img src="docs/images/fixture-difficulty-breakdown.png" width="700" />
 </p>
-<p align="center">
-  <img src="docs/images/fixture-difficulty-summary.png" width="700" />
-</p>
-
-
 ---
 
 ### User Favorites & Email Notifications (Demo Mode)
