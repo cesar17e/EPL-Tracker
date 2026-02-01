@@ -1,6 +1,6 @@
-import type { Request, Response, NextFunction } from "express";
-import * as meService from "../services/me.service.js";
+import type { Response, NextFunction } from "express";
 import type { AuthedRequest } from "../middleware/requireAuth.js";
+import * as meService from "../services/me.service.js";
 
 /**
  * GET /api/me/settings
@@ -96,3 +96,34 @@ export async function removeMyFavorite(req: AuthedRequest, res: Response, next: 
     next(err);
   }
 }
+
+
+/**
+ * POST /api/me/email-fixtures
+ *
+ * Sends the user a "digest" email listing the next upcoming match
+ * for each of their favorite teams.
+ *
+ * Requires:
+ * - requireAuth
+ * - requireVerifiedEmail
+ * - email_opt_in must be true (checked in service)
+ */
+export async function sendMyFixtureEmail(
+    req: AuthedRequest,
+    res: Response,
+    next: NextFunction
+  ) {
+    try {
+      if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+  
+      const result = await meService.sendFixtureDigestForUser(req.user.id);
+  
+      return res.json({
+        ok: true,
+        ...result,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }

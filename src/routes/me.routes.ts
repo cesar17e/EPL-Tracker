@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../middleware/requireAuth.js";
 import rateLimiter from "../middleware/rateLimiter.js";
-// import { requireVerifiedEmail } from "../middleware/requireVerifiedEmail.js";
+import { requireVerifiedEmail } from "../middleware/requireVerifiedEmail.js";
 
 import {
   getMySettings,
@@ -9,6 +9,7 @@ import {
   listMyFavorites,
   addMyFavorite,
   removeMyFavorite,
+  sendMyFixtureEmail
 } from "../controllers/me.controller.js";
 
 const router = Router();
@@ -26,5 +27,14 @@ router.patch("/settings", requireAuth, rateLimiter, updateMySettings);
 router.get("/favorites", requireAuth, listMyFavorites);
 router.post("/favorites", requireAuth, rateLimiter, addMyFavorite);
 router.delete("/favorites/:teamId", requireAuth, rateLimiter, removeMyFavorite);
+
+/**
+ * POST /api/me/email-fixtures
+ * Sends an email with the next upcoming fixture for each favorite team.
+ */
+router.post("/email-fixtures",requireAuth, requireVerifiedEmail, rateLimiter,sendMyFixtureEmail);
+
+
+
 
 export default router;
