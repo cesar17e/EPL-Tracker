@@ -164,7 +164,7 @@ Production design:
 - Admin-only EPL mini-sync job  
 - Pulls last completed matches & next upcoming fixtures  
 - Deduplicates across teams  
-- Uses Postgres advisory locks  
+- Uses transactional row-level locking to prevent duplicate updates
 - Sunday-only + rate limited  
 
 <p align="center">
@@ -203,12 +203,13 @@ GET /api/teams/:teamId/fixture-difficulty
 ### User & Favorites
 
 ```http
+GET    /api/me/settings
+PATCH  /api/me/settings
+GET    /api/me/favorites
 POST   /api/me/favorites
 DELETE /api/me/favorites/:teamId
-POST   /api/me/email-opt-in
 POST   /api/me/email-fixtures
 ```
-
 ---
 
 ### Admin
@@ -274,15 +275,19 @@ npm run migrate:latest
 npm run dev
 
 ### Minimal Environment Variables
+JWT_ACCESS_SECRET=...
+
+ACCESS_TOKEN_TTL=15m
+
 DATABASE_URL=postgres://...
 
-JWT_SECRET=...
+UPSTASH_REDIS_REST_URL=...
 
-REFRESH_TOKEN_SECRET=...
+UPSTASH_REDIS_REST_TOKEN=...
 
 SPORTS_API_KEY=...
 
-EMAIL_MODE=demo // logs emails instead of sending them.
+EMAIL_MODE=demo
 
 ---
 
@@ -321,4 +326,4 @@ It’s about:
 
 - Building systems  
 - Modeling uncertainty responsibly  
-- Using math to inform users
+- Using math to inform users while keeping every assumption visible and debuggable.
