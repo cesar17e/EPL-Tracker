@@ -275,19 +275,42 @@ npm run migrate:latest
 npm run dev
 
 ### Minimal Environment Variables
-JWT_ACCESS_SECRET=...
+NODE_ENV=development
+PORT=3001
+FRONTEND_ORIGIN=http://localhost:3000
+PUBLIC_BASE_URL=http://localhost:3001
 
+JWT_ACCESS_SECRET=...
 ACCESS_TOKEN_TTL=15m
+REFRESH_COOKIE_DAYS=7
+COOKIE_SAMESITE=lax
+COOKIE_SECURE=false
 
 DATABASE_URL=postgres://...
-
 UPSTASH_REDIS_REST_URL=...
-
 UPSTASH_REDIS_REST_TOKEN=...
 
 SPORTS_API_KEY=...
-
 EMAIL_MODE=demo
+
+### Deploying on Render (Backend)
+1. Push this repository to GitHub.
+2. In Render, create a **Web Service** from this repo.
+3. Set build command to:
+   `npm ci && npm run build`
+4. Set start command to:
+   `npm start`
+5. Add environment variables from `.env.example` (production values).
+6. Run database migrations against production DB:
+   `npm run migrate:deploy`
+7. Verify deployment:
+   `GET /api/health`
+
+If your frontend is on a different domain (for example Vercel), set:
+
+- `FRONTEND_ORIGIN=https://your-frontend-domain.com`
+- `COOKIE_SAMESITE=none`
+- `COOKIE_SECURE=true`
 
 ---
 

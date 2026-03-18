@@ -8,8 +8,9 @@
     "clean": "rimraf dist",
     "build": "npm run clean && tsc",
     "start": "node dist/server.js",
-    "migrate:latest": "NODE_ENV=development tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:latest",
-    "migrate:rollback": "NODE_ENV=development tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:rollback",
+    "migrate:latest": "tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:latest",
+    "migrate:rollback": "tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:rollback",
+    "migrate:deploy": "NODE_ENV=production npm run migrate:latest",
     "migrate:make": "tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:make"
   },
   "keywords": [],

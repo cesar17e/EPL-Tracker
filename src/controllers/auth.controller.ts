@@ -55,7 +55,7 @@ async function getUserById(id: number): Promise<User | null> {
 //Email helpers
 
 function buildVerifyLink(rawToken: string) {
-  const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 8000}`;
+  const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3001}`;
   // Your API base is /api already in server.ts
   return `${baseUrl}/api/auth/verify-email?token=${rawToken}`;
 }
