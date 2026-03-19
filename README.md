@@ -1,171 +1,104 @@
-# ⚽ PremTracker — Premier League Analytics & Tracking Backend
+# PremTracker
 
-**Demo Backend with Production Intent**
+PremTracker is a production-oriented Premier League analytics backend built with TypeScript, Node.js, Express, PostgreSQL, Knex, Upstash Redis, and Resend.
 
-PremTracker is a Premier League analytics and tracking backend designed to go beyond simple API data display.  
-It combines secure authentication, structured data ingestion, and lightweight mathematical modeling to give users meaningful insights into team form, trends, and fixture difficulty.
+It is designed as the API layer for a full-stack football product: the backend is live on Render today, and a Vercel frontend is the next planned step. The goal is not black-box prediction. The goal is to expose transparent, explainable team analytics through a secure API that can realistically support a real client application.
 
-This repository currently represents a **demo backend**, built with production-ready architecture.  
-A frontend and automated scheduling (cron / job queues) are planned future extensions.
-
----
-
-## Project Goals
-
-Most sports apps either:
-
-- Dump raw data  
-- Present predictions with no explanation  
-
-PremTracker aims to sit in the middle:
-
-- Transparent analytics  
-- Simple, explainable math  
-- Production-grade backend design  
-
-As a **Computer Science + Mathematics major**, the goal was to:
-
-- Apply statistical reasoning (rolling windows, variance, weighted models)  
-- Keep models interpretable  
-- Design systems that could realistically scale to production  
+**Live backend:** [https://premtracker-api.onrender.com](https://premtracker-api.onrender.com)  
+**Health check:** [https://premtracker-api.onrender.com/api/health](https://premtracker-api.onrender.com/api/health)
 
 ---
 
-## Key Features
+## What The Product Does
 
-### Authentication & Security
+PremTracker lets authenticated users:
 
-- JWT access tokens + rotating refresh tokens  
-- Refresh tokens stored **hashed** in Postgres  
-- Email verification flow (with resend support)  
-- Cookie-based auth for production parity  
-- Rate limiting via Upstash Redis  
-- Admin-only protected routes  
+- browse Premier League teams
+- inspect team summaries, historical matches, recent form, rolling trends, and fixture difficulty
+- favorite teams
+- manage email preferences
+- receive fixture-related emails after verification and opt-in
 
-**Refresh-token rotation & cookie-based auth**
+It also includes protected admin tooling to keep match data fresh through a controlled EPL sync workflow.
 
+This repository is the backend only. It is being built so a future Vercel frontend can consume it cleanly with:
+
+- bearer access tokens for API requests
+- rotating refresh tokens in `httpOnly` cookies
+- CORS and cookie settings that support cross-origin frontend/backend deployment
+- frontend-friendly email verification redirects
+
+---
+
+## Why This Project Is Strong For SWE Review
+
+- It is a real deployed backend, not just local prototype code.
+- It handles authentication, token rotation, email verification, rate limiting, and admin-only jobs.
+- It uses service/controller separation and a relational schema with explicit indexing and token storage strategy.
+- It combines product-facing features with explainable analytics logic instead of only CRUD endpoints.
+- It is structured for deployment and extension, with a clear path to a Vercel frontend and scheduled jobs later.
+
+---
+
+## Core Features
+
+### 1. Auth And Session Security
+
+- JWT access tokens
+- rotating refresh tokens
+- refresh tokens stored hashed in Postgres
+- `httpOnly` refresh cookie flow
+- email verification with Resend
+- route protection for authenticated, verified, and admin-only actions
+- rate limiting via Upstash Redis
 
 <p align="center">
   <img src="docs/images/auth-refresh-cookie.png" width="600" />
 </p>
 
+### 2. Team Exploration
 
----
-
-### Team Exploration & Match Data
-
-Users can:
-
-- Browse all Premier League teams  
-- Click a team to view a dashboard-style summary  
-- Drill into full match history  
-
-Core data exposed:
-
-- Last completed matches  
-- Upcoming fixtures  
-- Opponent context (home/away, perspective-based result)  
-
+- team list endpoint for browsing clubs
+- team summary endpoint with last completed matches and next fixtures
+- full match-history endpoint with result/fixture filtering
+- perspective-aware result mapping from the selected team view
 
 <p align="center">
   <img src="docs/images/team-summary.png" width="750" />
 </p>
 
----
+### 3. Explainable Analytics
 
-### Team Form Analytics (Math-Focused)
+PremTracker focuses on interpretable metrics rather than opaque prediction scores.
 
-Team form is computed from recent matches using:
+Current analytics include:
 
-- Points per game (PPG)  
-- Goals for / against  
-- Goal difference  
-- Clean sheets  
-- Volatility (standard deviation of points)  
-
-Rather than labeling form as *good* or *bad*, the API returns metrics so interpretation remains transparent.
-
-This avoids black-box scoring while still providing actionable insight.
-
----
-
-### Rolling Trends (Sliding Window Analysis)
-
-To capture momentum:
-
-1. Select last N completed matches  
-2. Slide a window of size M  
-3. Compute per-window averages  
-
-Metrics:
-
-- PPG  
-- Goals for / against  
-- Goal difference  
-
-This produces time-series data showing whether a team is:
-
-- Improving  
-- Stagnating  
-- Declining  
+- form snapshots from recent completed matches
+- rolling-window trends for momentum analysis
+- fixture difficulty scoring based on opponent strength and recent momentum
 
 <p align="center">
   <img src="docs/images/trends-rolling-window.png" width="750" />
 </p>
 
-
-
----
-
-### Fixture Difficulty Modeling (Explainable Math)
-
-Upcoming fixtures are scored using a weighted opponent-strength model:
-
-```
-OpponentStrength = baselinePPG + α · ΔPPG
-```
-
-Where:
-
-- `baselinePPG` = long-run team strength  
-- `ΔPPG` = recent momentum shift  
-- `α ∈ [0.3, 0.5]` scales momentum  
-
-This mirrors modeling in physics and differential equations:  
-short-term signals are informative but noisy.
-
-Produces:
-
-- Per-fixture difficulty  
-- Overall short-term outlook
-
 <p align="center">
   <img src="docs/images/fixture-difficulty-breakdown.png" width="700" />
 </p>
----
 
-### User Favorites & Email Notifications (Demo Mode)
+### 4. Favorites And Email Workflows
 
-- Users can favorite teams  
-- Email notifications are opt-in only  
-- Email verification required before enabling notifications  
-- Demo endpoint allows users to trigger their own fixture email  
+- users can favorite teams
+- email reminders are opt-in only
+- verified email is required before email workflows are enabled
+- fixture digest sending supports local demo mode and live Resend delivery
 
-Production design:
+### 5. Admin Sync Workflow
 
-- Cron / job queues  
-- Batched per user  
-- Scheduled delivery (e.g., Mondays)
-
----
-
-### Admin Sync & Data Ingestion
-
-- Admin-only EPL mini-sync job  
-- Pulls last completed matches & next upcoming fixtures  
-- Deduplicates across teams  
-- Uses transactional row-level locking to prevent duplicate updates
-- Sunday-only + rate limited  
+- admin-only sync endpoint
+- Sunday-only execution guard
+- Upstash-limited execution
+- deduped EPL match ingest
+- idempotent UPSERT-based updates into Postgres
 
 <p align="center">
   <img src="docs/images/admin-sync.png" width="650" />
@@ -173,21 +106,58 @@ Production design:
 
 ---
 
+## Analytics Model Summary
+
+### Team Form
+
+Form is derived from recent completed matches using:
+
+- points per game
+- goals for and against
+- goal difference
+- clean sheets
+- volatility from standard deviation of recent match points
+
+The API also compares a recent window against a baseline window to label current form in a way that stays interpretable.
+
+### Rolling Trends
+
+The trends endpoint uses a sliding window over recent completed matches to produce series data for:
+
+- points per game
+- goal difference per match
+- goals for per match
+- goals against per match
+
+This makes directional change visible without hiding the underlying math.
+
+### Fixture Difficulty
+
+Upcoming fixtures are scored with a weighted opponent-strength model:
+
+```txt
+opponentStrength = baselinePPG + alpha * (recentPPG - baselinePPG)
+```
+
+That score is then adjusted by venue context and returned with both per-fixture detail and an overall short-run label.
+
+---
+
 ## API Overview
 
-### Authentication
+### Auth
 
 ```http
 POST /api/auth/register
 POST /api/auth/login
 POST /api/auth/refresh
+POST /api/auth/logout
 GET  /api/auth/verify-email
 POST /api/auth/request-verify
+GET  /api/auth/me
 ```
 
----
-
-### Teams & Analytics
+### Teams
 
 ```http
 GET /api/teams
@@ -198,9 +168,7 @@ GET /api/teams/:teamId/trends
 GET /api/teams/:teamId/fixture-difficulty
 ```
 
----
-
-### User & Favorites
+### User
 
 ```http
 GET    /api/me/settings
@@ -210,7 +178,6 @@ POST   /api/me/favorites
 DELETE /api/me/favorites/:teamId
 POST   /api/me/email-fixtures
 ```
----
 
 ### Admin
 
@@ -220,133 +187,164 @@ POST /api/admin/sync-games
 
 ---
 
-## Architecture Overview
+## Backend Stack
 
-### Backend Stack
-
-- Node.js + TypeScript  
-- Express  
-- PostgreSQL (Neon)  
-- Knex migrations  
-- Upstash Redis  
-- Resend (email)
-
-### Key Design Choices
-
-- Internal IDs + external API IDs  
-- Hashed tokens only  
-- Composite keys for favorites  
-- Indexed match lookups  
-- Service/controller separation  
-
-
-### Repository Structure
-
-src/
-
-├── controllers/        # HTTP request/response handling
-
-├── services/           # Business logic, analytics, DB queries
-
-├── routes/             # Express route definitions
-
-├── middleware/         # Auth, rate limits, admin guards
-
-├── scripts/            # One-off & admin sync jobs
-
-├── db/                 # Postgres pool & shared DB types
-
-├── utils/              # Tokens, cookies, helpers
-
-├── config/             # External services (Redis, etc.)
-
-├── server.ts           # Express app entry point
-
-Design principle:
-> Controllers stay thin, services hold logic, scripts are isolated from HTTP.
+- TypeScript
+- Node.js
+- Express
+- PostgreSQL
+- Knex migrations
+- Upstash Redis
+- Resend
 
 ---
 
-### Running Locally
-npm install 
+## Architecture
 
-npm run migrate:latest
+PremTracker uses a straightforward backend structure built for maintainability:
 
-npm run dev
+```txt
+src/
+├── config/       # environment/service config
+├── controllers/  # request/response orchestration
+├── db/           # Postgres connection + shared types
+├── middleware/   # auth, rate limiting, admin guards, errors
+├── routes/       # route registration
+├── scripts/      # seed and sync scripts
+├── services/     # business logic, analytics, data access
+├── utils/        # tokens, cookies, helpers
+└── server.ts     # app entry point
+```
 
-### Minimal Environment Variables
+Design choices:
+
+- thin controllers, logic in services
+- internal IDs plus external sports API IDs
+- hashed refresh and verification tokens
+- indexed match lookups
+- explicit middleware layering for auth and permissions
+
+---
+
+## Deployment Status
+
+The backend is deployed on Render and configured for production-style operation.
+
+Current production-oriented behavior includes:
+
+- startup config validation
+- health-check endpoint
+- Render-compatible build/start flow
+- live Resend support
+- cookie/CORS behavior for a future Vercel frontend
+- frontend redirect support after email verification
+
+Planned next step:
+
+- build the frontend on Vercel and connect it to this API
+
+---
+
+## Local Development
+
+### 1. Install
+
+```bash
+npm install
+```
+
+### 2. Configure Environment
+
+Use [.env.example](.env.example) as the template.
+
+For local development, the important defaults are:
+
+```env
 NODE_ENV=development
 PORT=3001
-FRONTEND_ORIGIN=http://localhost:3000
 PUBLIC_BASE_URL=http://localhost:3001
-
-JWT_ACCESS_SECRET=...
-ACCESS_TOKEN_TTL=15m
-REFRESH_COOKIE_DAYS=7
+FRONTEND_ORIGINS=http://localhost:3000
+EMAIL_MODE=demo
 COOKIE_SAMESITE=lax
 COOKIE_SECURE=false
+```
 
-DATABASE_URL=postgres://...
-UPSTASH_REDIS_REST_URL=...
-UPSTASH_REDIS_REST_TOKEN=...
+### 3. Run Migrations
 
-SPORTS_API_KEY=...
-EMAIL_MODE=demo
+```bash
+npm run migrate:latest
+```
 
-### Deploying on Render (Backend)
-1. Push this repository to GitHub.
-2. In Render, create a **Web Service** from this repo.
-3. Set build command to:
-   `npm ci && npm run build`
-4. Set start command to:
-   `npm start`
-5. Add environment variables from `.env.example` (production values).
-6. Run database migrations against production DB:
-   `npm run migrate:deploy`
-7. Verify deployment:
-   `GET /api/health`
+### 4. Start The Server
 
-If your frontend is on a different domain (for example Vercel), set:
+```bash
+npm run dev
+```
 
-- `FRONTEND_ORIGIN=https://your-frontend-domain.com`
+---
+
+## Render Deployment
+
+Recommended Render settings:
+
+- Root Directory: leave blank
+- Build Command: `npm ci && npm run build`
+- Start Command: `npm start`
+- Pre-Deploy Command: `npm run migrate:deploy`
+
+Required production env values include:
+
+- `DATABASE_URL`
+- `JWT_ACCESS_SECRET`
+- `PUBLIC_BASE_URL`
+- `FRONTEND_ORIGINS`
 - `COOKIE_SAMESITE=none`
 - `COOKIE_SECURE=true`
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+- `EMAIL_MODE=live`
+- `RESEND_API_KEY`
+- `EMAIL_FROM`
+- `SPORTS_API_KEY`
+
+If the frontend is not live yet, keep `FRONTEND_ORIGINS=http://localhost:3000` and leave `EMAIL_VERIFY_REDIRECT_URL` empty until the Vercel client exists.
 
 ---
 
-## Demo vs Production
+## Future Frontend Integration
 
-### Current (Demo)
+The backend is already structured for a separate frontend deployment.
 
-- Emails can be logged instead of sent  
-- Users manually trigger emails  
-- Admin manually triggers sync  
+Expected Vercel integration flow:
 
-### Production-Ready by Design
+- frontend sends bearer access tokens on protected API requests
+- frontend calls `/api/auth/refresh` with `credentials: "include"`
+- backend issues refresh cookies from the Render domain
+- email verification links hit the backend first, then redirect to a frontend route
 
-- Cron/queue driven jobs  
-- Isolated email logic  
-- Idempotent sync  
-- Frontend pluggable without refactor  
+This keeps auth boundaries clean while still supporting modern cross-origin SPA behavior.
 
 ---
 
-## Future Roadmap
+## Roadmap
 
-- Frontend (React / Next.js)  
-- Scheduled cron jobs  
-- Caching hot endpoints  
-- Advanced models (xG, Elo)  
-- Multi-competition support  
+- ship the Vercel frontend
+- add scheduled weekly sync/email workflows
+- expand caching and operational monitoring
+- add deeper analytics models over time
+- grow beyond single-competition support later
 
 ---
 
-## Overall
+## Summary
 
-PremTracker isn’t about predicting match results.
+PremTracker is a strong backend-focused project because it combines:
 
-It’s about:
+- secure authentication and session handling
+- relational data design
+- third-party integrations
+- protected admin workflows
+- deployed production setup
+- explainable analytics tied to a real user-facing product direction
 
-- Building systems  
-- Modeling uncertainty responsibly  
-- Using math to inform users while keeping every assumption visible and debuggable.
+It is not just a sports API wrapper. It is an intentionally engineered backend for a real application.
