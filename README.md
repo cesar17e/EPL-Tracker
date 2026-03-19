@@ -302,30 +302,6 @@ If the frontend is not live yet, keep `FRONTEND_ORIGINS=http://localhost:3000` a
 
 ---
 
-## Future Frontend Integration
-
-The backend is already structured for a separate frontend deployment.
-
-Expected Vercel integration flow:
-
-- frontend sends bearer access tokens on protected API requests
-- frontend calls `/api/auth/refresh` with `credentials: "include"`
-- backend issues refresh cookies from the Render domain
-- email verification links hit the backend first, then redirect to a frontend route
-
-This keeps auth boundaries clean while still supporting modern cross-origin SPA behavior.
-
----
-
-## Roadmap
-
-- ship the Vercel frontend
-- add scheduled weekly sync/email workflows
-- expand caching and operational monitoring
-- add deeper analytics models over time
-- grow beyond single-competition support later
-
----
 
 ## Summary
 
