@@ -29,17 +29,6 @@ This repository is the backend only. It is being built so a future Vercel fronte
 - rotating refresh tokens in `httpOnly` cookies
 - CORS and cookie settings that support cross-origin frontend/backend deployment
 - frontend-friendly email verification redirects
-
----
-
-## Why This Project Is Strong For SWE Review
-
-- It is a real deployed backend, not just local prototype code.
-- It handles authentication, token rotation, email verification, rate limiting, and admin-only jobs.
-- It uses service/controller separation and a relational schema with explicit indexing and token storage strategy.
-- It combines product-facing features with explainable analytics logic instead of only CRUD endpoints.
-- It is structured for deployment and extension, with a clear path to a Vercel frontend and scheduled jobs later.
-
 ---
 
 ## Core Features
