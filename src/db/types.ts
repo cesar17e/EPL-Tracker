@@ -6,6 +6,7 @@ export interface User {
     email_verified: boolean;  // BOOLEAN
     email_opt_in: boolean;    // BOOLEAN
     time_zone: string;        // TEXT
+    is_admin: boolean;        // BOOLEAN
     created_at: Date;         // TIMESTAMPTZ -> Date
     updated_at: Date;         // TIMESTAMPTZ -> Date
   }

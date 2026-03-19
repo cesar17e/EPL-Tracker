@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { getEmailMode } from "../config/env.js";
 
 function getResendClient() {
   const apiKey = process.env.RESEND_API_KEY;
@@ -11,7 +12,7 @@ type SendEmailResult =
   | { mode: "live"; sent: false; error: unknown };
 
 export async function sendVerifyEmail(to: string, verifyLink: string): Promise<SendEmailResult> {
-  const mode = (process.env.EMAIL_MODE || "live").toLowerCase();
+  const mode = getEmailMode();
 
   // DEMO MODE: don't send, just return link
   if (mode === "demo") {
@@ -72,7 +73,23 @@ type SendDigestResult =
   | { mode: "live"; sent: true }
   | { mode: "live"; sent: false; error: unknown };
 
-function formatFixtureLine(item: FixtureDigestItem) {
+function formatFixtureKickoff(iso: string, timeZone: string) {
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+}
+
+function formatFixtureLine(item: FixtureDigestItem, timeZone: string) {
   const teamLabel = item.team.shortName ? `${item.team.name} (${item.team.shortName})` : item.team.name;
 
   if (!item.fixture) {
@@ -81,7 +98,7 @@ function formatFixtureLine(item: FixtureDigestItem) {
 
   const h = item.fixture.home.shortName || item.fixture.home.name || "Home";
   const a = item.fixture.away.shortName || item.fixture.away.name || "Away";
-  const when = item.fixture.startTime;
+  const when = formatFixtureKickoff(item.fixture.startTime, timeZone);
 
   return `<li><b>${teamLabel}</b>: ${h} vs ${a} — <code>${when}</code></li>`;
 }
@@ -90,14 +107,14 @@ export async function sendFixtureDigestEmail(
   to: string,
   payload: FixtureDigestPayload
 ): Promise<SendDigestResult> {
-  const mode = (process.env.EMAIL_MODE || "live").toLowerCase();
+  const mode = getEmailMode();
 
   const subject = "Your favorite teams — next fixture";
   const html = `
     <p>Here is the next upcoming fixture for each of your favorite teams.</p>
     <p><i>Timezone:</i> ${payload.timeZone}</p>
     <ul>
-      ${payload.items.map(formatFixtureLine).join("\n")}
+      ${payload.items.map((item) => formatFixtureLine(item, payload.timeZone)).join("\n")}
     </ul>
     <p>You can disable these emails anytime in settings.</p>
   `;

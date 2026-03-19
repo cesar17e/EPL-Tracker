@@ -15,12 +15,14 @@ import {
 
 import { pool } from "../db/pool.js";
 import type { User } from "../db/types.js";
+import type { AuthedRequest } from "../middleware/requireAuth.js";
 import crypto from "crypto";
 
 import validator from "validator";
 import { hasMxRecord } from "../utils/email.js";
 
 import { sendVerifyEmail } from "../services/email.service.js";
+import { buildEmailVerificationRedirectUrl, getPublicBaseUrl } from "../config/env.js";
 
 
 //---Helpers ---
@@ -55,9 +57,25 @@ async function getUserById(id: number): Promise<User | null> {
 //Email helpers
 
 function buildVerifyLink(rawToken: string) {
-  const baseUrl = process.env.PUBLIC_BASE_URL || `http://localhost:${process.env.PORT || 3001}`;
-  // Your API base is /api already in server.ts
+  const baseUrl = getPublicBaseUrl();
   return `${baseUrl}/api/auth/verify-email?token=${rawToken}`;
+}
+
+function redirectAfterVerification(
+  res: Response,
+  status: "success" | "error",
+  message: string
+) {
+  const redirectUrl = buildEmailVerificationRedirectUrl(status, message);
+  if (redirectUrl) {
+    return res.redirect(303, redirectUrl);
+  }
+
+  const httpStatus = status === "success" ? 200 : 400;
+  return res.status(httpStatus).json({
+    ok: status === "success",
+    message,
+  });
 }
 
 
@@ -110,7 +128,7 @@ export async function register(req: Request, res: Response) {
   const accessToken = signAccessToken(user.id, user.email);
 
   return res.status(201).json({
-  user: { id: user.id, email: user.email },
+  user: { id: user.id, email: user.email, emailVerified: user.email_verified },
   accessToken,
   emailVerificationSent:
     emailResult.mode === "live" ? emailResult.sent : false,
@@ -150,7 +168,7 @@ export async function login(req: Request, res: Response) {
   const accessToken = signAccessToken(user.id, user.email);
 
   return res.json({
-    user: { id: user.id, email: user.email },
+    user: { id: user.id, email: user.email, emailVerified: user.email_verified },
     accessToken,
   });
 }
@@ -225,26 +243,24 @@ export async function verifyEmail(req: Request, res: Response) {
   */
   const token = req.query.token;
   if (!token || typeof token !== "string") {
-    return res.status(400).json({ error: "Missing token" });
+    return redirectAfterVerification(res, "error", "Missing token");
   }
 
   const userId = await consumeEmailVerificationToken(token);
   if (!userId) {
-    return res.status(400).json({ error: "Invalid or expired token" });
+    return redirectAfterVerification(res, "error", "Invalid or expired token");
   }
 
   await markUserEmailVerified(userId);
-  return res.json({ ok: true, message: "Email verified" });
+  return redirectAfterVerification(res, "success", "Email verified");
 }
 
 /**
  * Resend verification link (for unverified users).
  * Caller must be logged in (requireAuth), but still unverified.
  */
-export async function requestVerify(req: Request, res: Response) {
-  // requireAuth attaches req.user
-  // @ts-expect-error (you can type this later with AuthedRequest)
-  const userId = req.user?.id as number | undefined;
+export async function requestVerify(req: AuthedRequest, res: Response) {
+  const userId = req.user?.id;
 
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
@@ -263,7 +279,9 @@ export async function requestVerify(req: Request, res: Response) {
   return res.json({
     ok: emailResult.mode === "live" ? emailResult.sent : true,
     message:
-      emailResult.mode === "live" && emailResult.sent
+      emailResult.mode === "demo"
+        ? "Verification link generated"
+        : emailResult.sent
         ? "Verification link sent"
         : "Could not send verification email",
     emailVerificationSent:

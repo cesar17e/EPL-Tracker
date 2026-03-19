@@ -4,6 +4,14 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import routes from "./routes/index.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import {
+  getAllowedOrigins,
+  getEmailMode,
+  getPort,
+  getPublicBaseUrl,
+  isAllowedOrigin,
+  validateStartupConfig,
+} from "./config/env.js";
 
 dotenv.config();
 
@@ -14,16 +22,13 @@ const app = express();
 const trustProxy = Number(process.env.TRUST_PROXY ?? 1);
 app.set("trust proxy", Number.isFinite(trustProxy) ? trustProxy : 1);
 
-const allowedOrigins = (process.env.FRONTEND_ORIGIN ?? "http://localhost:3000")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const allowedOrigins = getAllowedOrigins();
 
 app.use(
   cors({
     origin(origin, callback) {
       // Allow non-browser clients (curl, Postman, Render health checks)
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
@@ -46,19 +51,31 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Health check + DB test on startup
-const PORT = Number(process.env.PORT || 3001);
+const PORT = getPort();
 
 async function startServer() {
   try {
+    const warnings = validateStartupConfig();
+    for (const warning of warnings) {
+      console.warn(`[startup] ${warning}`);
+    }
+
     await pool.query("SELECT 1");
     console.log("Postgres connection successful");
+    console.log("Startup config:", {
+      nodeEnv: process.env.NODE_ENV ?? "development",
+      port: PORT,
+      publicBaseUrl: getPublicBaseUrl(),
+      allowedOrigins,
+      emailMode: getEmailMode(),
+    });
 
     app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+      console.log(`Server listening on port ${PORT}`);
     });
   } catch (err) {
-    console.error("Failed to connect to Postgres:", err);
-    await shutdown("Exiting due to DB connection failure", 1);
+    console.error("Failed to start server:", err);
+    await shutdown("Exiting due to startup failure", 1);
   }
 }
 
