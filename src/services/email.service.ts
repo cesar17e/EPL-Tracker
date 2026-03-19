@@ -27,13 +27,14 @@ export async function sendVerifyEmail(to: string, verifyLink: string): Promise<S
     return { mode: "live", sent: false, error: "RESEND_API_KEY missing" };
   }
 
-  const from = process.env.EMAIL_FROM || "SubTrack <onboarding@resend.dev>";
+  const from = process.env.EMAIL_FROM || "PremTracker <noreply@premtracker.pro>";
 
   const { error } = await resend.emails.send({
     from,
     to: [to],
-    subject: "Verify your email",
+    subject: "Verify your PremTracker account",
     html: `
+      <p>Welcome to PremTracker.</p>
       <p>Verify your email by clicking the link below:</p>
       <p><a href="${verifyLink}">${verifyLink}</a></p>
       <p>If you didn’t create an account, you can ignore this email.</p>
@@ -115,7 +116,7 @@ export async function sendFixtureDigestEmail(
     return { mode: "live", sent: false, error: "RESEND_API_KEY missing" };
   }
 
-  const from = process.env.EMAIL_FROM || "SubTrack <onboarding@resend.dev>";
+  const from = process.env.EMAIL_FROM || "PremTracker <noreply@premtracker.pro>";
 
   const { error } = await resend.emails.send({
     from,

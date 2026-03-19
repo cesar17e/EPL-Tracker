@@ -339,6 +339,7 @@ type UpcomingFixtureRow = {
       sentTo: user.email,
       favorites: favorites.length,
       fixturesFound: items.filter((x) => x.fixture !== null).length,
-      mode: (sendResult as any).mode,
+      emailSent: sendResult.mode === "live" ? sendResult.sent : false,
+      mode: sendResult.mode,
     };
   }

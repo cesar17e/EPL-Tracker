@@ -110,9 +110,11 @@ export async function register(req: Request, res: Response) {
   const accessToken = signAccessToken(user.id, user.email);
 
   return res.status(201).json({
-    user: { id: user.id, email: user.email },
-    accessToken,
-    ...(emailResult.mode === "demo" ? { verifyLink: emailResult.verifyLink } : {}),
+  user: { id: user.id, email: user.email },
+  accessToken,
+  emailVerificationSent:
+    emailResult.mode === "live" ? emailResult.sent : false,
+  ...(emailResult.mode === "demo" ? { verifyLink: emailResult.verifyLink } : {}),
   });
 }
 
@@ -259,8 +261,13 @@ export async function requestVerify(req: Request, res: Response) {
   const emailResult = await sendVerifyEmail(user.email, verifyLink);
 
   return res.json({
-    ok: true,
-    message: "Verification link sent",
+    ok: emailResult.mode === "live" ? emailResult.sent : true,
+    message:
+      emailResult.mode === "live" && emailResult.sent
+        ? "Verification link sent"
+        : "Could not send verification email",
+    emailVerificationSent:
+      emailResult.mode === "live" ? emailResult.sent : false,
     ...(emailResult.mode === "demo" ? { verifyLink: emailResult.verifyLink } : {}),
   });
 }
