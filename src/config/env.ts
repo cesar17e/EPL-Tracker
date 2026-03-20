@@ -70,6 +70,15 @@ export function buildEmailVerificationRedirectUrl(
   return url.toString();
 }
 
+export function buildPasswordResetRedirectUrl(token: string) {
+  const base = process.env.PASSWORD_RESET_REDIRECT_URL?.trim();
+  if (!base) return null;
+
+  const url = new URL(base);
+  url.searchParams.set("token", token);
+  return url.toString();
+}
+
 export function validateStartupConfig() {
   const warnings: string[] = [];
   const isProd = process.env.NODE_ENV === "production";
@@ -83,6 +92,17 @@ export function validateStartupConfig() {
         throw new Error("EMAIL_VERIFY_REDIRECT_URL must be a valid absolute URL.");
       }
       warnings.push("EMAIL_VERIFY_REDIRECT_URL is not a valid absolute URL.");
+    }
+  }
+
+  if (process.env.PASSWORD_RESET_REDIRECT_URL) {
+    try {
+      new URL(process.env.PASSWORD_RESET_REDIRECT_URL);
+    } catch {
+      if (isProd) {
+        throw new Error("PASSWORD_RESET_REDIRECT_URL must be a valid absolute URL.");
+      }
+      warnings.push("PASSWORD_RESET_REDIRECT_URL is not a valid absolute URL.");
     }
   }
 

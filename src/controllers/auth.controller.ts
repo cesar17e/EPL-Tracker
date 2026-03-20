@@ -11,6 +11,8 @@ import {
   createEmailVerificationToken,
   consumeEmailVerificationToken,
   markUserEmailVerified,
+  createPasswordResetToken,
+  resetPasswordWithToken,
 } from "../services/auth.service.js";
 
 import { pool } from "../db/pool.js";
@@ -21,8 +23,12 @@ import crypto from "crypto";
 import validator from "validator";
 import { hasMxRecord } from "../utils/email.js";
 
-import { sendVerifyEmail } from "../services/email.service.js";
-import { buildEmailVerificationRedirectUrl, getPublicBaseUrl } from "../config/env.js";
+import { sendPasswordResetEmail, sendVerifyEmail } from "../services/email.service.js";
+import {
+  buildEmailVerificationRedirectUrl,
+  buildPasswordResetRedirectUrl,
+  getPublicBaseUrl,
+} from "../config/env.js";
 
 
 //---Helpers ---
@@ -59,6 +65,11 @@ async function getUserById(id: number): Promise<User | null> {
 function buildVerifyLink(rawToken: string) {
   const baseUrl = getPublicBaseUrl();
   return `${baseUrl}/api/auth/verify-email?token=${rawToken}`;
+}
+
+function buildPasswordResetLink(rawToken: string) {
+  const baseUrl = getPublicBaseUrl();
+  return `${baseUrl}/api/auth/reset-password?token=${rawToken}`;
 }
 
 function redirectAfterVerification(
@@ -287,5 +298,72 @@ export async function requestVerify(req: AuthedRequest, res: Response) {
     emailVerificationSent:
       emailResult.mode === "live" ? emailResult.sent : false,
     ...(emailResult.mode === "demo" ? { verifyLink: emailResult.verifyLink } : {}),
+  });
+}
+
+const forgotPasswordResponse = {
+  ok: true,
+  message: "If an account exists for that email, a password reset link has been sent.",
+};
+
+export async function forgotPassword(req: Request, res: Response) {
+  const email = req.body?.email;
+  if (typeof email !== "string" || !email.trim()) {
+    return res.json(forgotPasswordResponse);
+  }
+
+  const user = await findUserByEmail(email);
+  if (!user) {
+    return res.json(forgotPasswordResponse);
+  }
+
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+  const rawToken = await createPasswordResetToken(user.id, expiresAt);
+  const resetLink = buildPasswordResetLink(rawToken);
+
+  await sendPasswordResetEmail(user.email, resetLink);
+  return res.json(forgotPasswordResponse);
+}
+
+export async function getResetPasswordLink(req: Request, res: Response) {
+  const token = req.query.token;
+  if (!token || typeof token !== "string") {
+    return res.status(400).json({ error: "Missing token" });
+  }
+
+  const redirectUrl = buildPasswordResetRedirectUrl(token);
+  if (redirectUrl) {
+    return res.redirect(303, redirectUrl);
+  }
+
+  return res.json({
+    ok: true,
+    message: "Submit this token with POST /api/auth/reset-password and a new password.",
+    token,
+  });
+}
+
+export async function resetPassword(req: Request, res: Response) {
+  const token = req.body?.token;
+  const newPassword = req.body?.newPassword;
+
+  if (typeof token !== "string" || !token.trim()) {
+    return res.status(400).json({ error: "token is required" });
+  }
+
+  if (typeof newPassword !== "string" || !newPassword.trim()) {
+    return res.status(400).json({ error: "newPassword is required" });
+  }
+
+  const result = await resetPasswordWithToken(token, newPassword);
+  if (!result) {
+    return res.status(400).json({ error: "Invalid or expired token" });
+  }
+
+  clearRefreshCookie(res);
+
+  return res.json({
+    ok: true,
+    message: "Password reset successful. Please log in again.",
   });
 }

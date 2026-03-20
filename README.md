@@ -40,6 +40,7 @@ This repository is the backend only. It is being built so a future Vercel fronte
 - refresh tokens stored hashed in Postgres
 - `httpOnly` refresh cookie flow
 - email verification with Resend
+- forgot-password and reset-password flow with one-time hashed reset tokens
 - route protection for authenticated, verified, and admin-only actions
 - rate limiting via Upstash Redis
 
@@ -145,6 +146,9 @@ POST /api/auth/refresh
 POST /api/auth/logout
 GET  /api/auth/verify-email
 POST /api/auth/request-verify
+POST /api/auth/forgot-password
+GET  /api/auth/reset-password
+POST /api/auth/reset-password
 GET  /api/auth/me
 ```
 

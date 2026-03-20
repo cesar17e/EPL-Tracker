@@ -51,6 +51,53 @@ export async function sendVerifyEmail(to: string, verifyLink: string): Promise<S
   return { mode: "live", sent: true };
 }
 
+type SendPasswordResetResult =
+  | { mode: "demo"; resetLink: string }
+  | { mode: "live"; sent: true }
+  | { mode: "live"; sent: false; error: unknown };
+
+export async function sendPasswordResetEmail(
+  to: string,
+  resetLink: string
+): Promise<SendPasswordResetResult> {
+  const mode = getEmailMode();
+
+  if (mode === "demo") {
+    console.log(`\n[PASSWORD RESET - DEMO]\nTo: ${to}\nLink: ${resetLink}\n`);
+    return { mode: "demo", resetLink };
+  }
+
+  const resend = getResendClient();
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set. Falling back to demo-like behavior.");
+    console.log(`\n[PASSWORD RESET FALLBACK]\nTo: ${to}\nLink: ${resetLink}\n`);
+    return { mode: "live", sent: false, error: "RESEND_API_KEY missing" };
+  }
+
+  const from = process.env.EMAIL_FROM || "PremTracker <noreply@premtracker.pro>";
+
+  const { error } = await resend.emails.send({
+    from,
+    to: [to],
+    subject: "Reset your PremTracker password",
+    html: `
+      <p>We received a request to reset your PremTracker password.</p>
+      <p>Use the link below to continue:</p>
+      <p><a href="${resetLink}">${resetLink}</a></p>
+      <p>This link expires in 1 hour and can only be used once.</p>
+      <p>If you did not request this, you can ignore this email.</p>
+    `,
+  });
+
+  if (error) {
+    console.error("Resend error:", error);
+    console.log(`\n[PASSWORD RESET FALLBACK]\nTo: ${to}\nLink: ${resetLink}\n`);
+    return { mode: "live", sent: false, error };
+  }
+
+  return { mode: "live", sent: true };
+}
+
 
 //!------For upcoming game sending email---
 

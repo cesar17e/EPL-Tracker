@@ -264,3 +264,85 @@ export async function markUserEmailVerified(userId: number): Promise<void> {
     [userId]
   );
 }
+
+// ----- Password reset helpers -----
+
+export async function createPasswordResetToken(userId: number, expiresAt: Date): Promise<string> {
+  const rawToken = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = sha256(rawToken);
+
+  await pool.query(
+    `
+    INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+    VALUES ($1, $2, $3)
+    `,
+    [userId, tokenHash, expiresAt.toISOString()]
+  );
+
+  return rawToken;
+}
+
+export async function resetPasswordWithToken(
+  rawToken: string,
+  newPassword: string
+): Promise<{ userId: number } | null> {
+  const tokenHash = sha256(rawToken);
+  const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+  await pool.query("BEGIN");
+  try {
+    const tokenRes = await pool.query<{ user_id: number }>(
+      `
+      SELECT user_id
+      FROM password_reset_tokens
+      WHERE token_hash = $1
+        AND used_at IS NULL
+        AND expires_at > now()
+      FOR UPDATE
+      `,
+      [tokenHash]
+    );
+
+    const row = tokenRes.rows[0];
+    if (!row) {
+      await pool.query("ROLLBACK");
+      return null;
+    }
+
+    const userId = Number(row.user_id);
+
+    await pool.query(
+      `
+      UPDATE users
+      SET password_hash = $2,
+          updated_at = now()
+      WHERE id = $1
+      `,
+      [userId, passwordHash]
+    );
+
+    await pool.query(
+      `
+      UPDATE password_reset_tokens
+      SET used_at = now()
+      WHERE token_hash = $1 AND used_at IS NULL
+      `,
+      [tokenHash]
+    );
+
+    await pool.query(
+      `
+      UPDATE refresh_tokens
+      SET revoked_at = now()
+      WHERE user_id = $1 AND revoked_at IS NULL
+      `,
+      [userId]
+    );
+
+    await pool.query("COMMIT");
+    return { userId };
+  } catch (err) {
+    await pool.query("ROLLBACK");
+    throw err;
+  }
+}
