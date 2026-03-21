@@ -31,6 +31,27 @@ This repository is the backend only. It is being built so a future Vercel fronte
 - frontend-friendly email verification redirects
 ---
 
+## Purpose
+
+PremTracker was built at the intersection of computer science, mathematics, and a passion for football.
+
+As a Computer Science and Mathematics student at Rutgers University – New Brunswick, I wanted to build a system that does more than just display sports data. Most sports analytics platforms rely on opaque metrics and “black-box” scores that are difficult to interpret without a technical background.
+
+The goal of PremTracker is different:
+
+- make football analytics transparent and explainable  
+- expose the math behind team performance in a way that is easy to understand  
+- design metrics that are interpretable, not just predictive  
+
+Every metric in this system is intentionally designed so that a user can answer:
+
+> “Why is this the output?”
+
+Instead of hiding the math, PremTracker surfaces it — turning raw match data into insights that are both meaningful and accessible, even for non-technical users.
+
+This project reflects my belief that mathematics should not be hidden behind abstractions, but used as a tool to make real-world systems more understandable.
+
+
 ## Core Features
 
 ### 1. Auth And Session Security
