@@ -2,7 +2,7 @@
 
 PremTracker is a production-oriented Premier League analytics backend built with TypeScript, Node.js, Express, PostgreSQL, Knex, Upstash Redis, and Resend.
 
-It is designed as the API layer for a full-stack football product: the backend is live on Render today, and a Vercel frontend is the next planned step. The goal is not black-box prediction. The goal is to expose transparent, explainable team analytics through a secure API that can realistically support a real client application.
+It is designed as the API layer for a full-stack soccer product: the backend is live on Render today, and a Vercel frontend is the next planned step. The goal is not black-box prediction. The goal is to expose transparent, explainable team analytics through a secure API that can realistically support a real client application.
 
 **Deployed API base::** [https://premtracker-api.onrender.com](https://premtracker-api.onrender.com)  
 **Health check:** [https://premtracker-api.onrender.com/api/health](https://premtracker-api.onrender.com/api/health)
@@ -33,13 +33,13 @@ This repository is the backend only. It is being built so a future Vercel fronte
 
 ## Purpose
 
-PremTracker was built at the intersection of computer science, mathematics, and a passion for football.
+PremTracker was built at the intersection of computer science, mathematics, and a passion for soccer.
 
 As a Computer Science and Mathematics student at Rutgers University – New Brunswick, I wanted to build a system that does more than just display sports data. Most sports analytics platforms rely on opaque metrics and “black-box” scores that are difficult to interpret without a technical background.
 
 The goal of PremTracker is different:
 
-- make football analytics transparent and explainable  
+- make soccer analytics transparent and explainable  
 - expose the math behind team performance in a way that is easy to understand  
 - design metrics that are interpretable, not just predictive  
 
