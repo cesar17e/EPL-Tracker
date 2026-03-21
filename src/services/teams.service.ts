@@ -132,6 +132,10 @@ function mapTeamMini(row: {
   };
 }
 
+function getDisplayShortName(value: string | null, fallback: string) {
+  return value ?? fallback;
+}
+
 //*END OF HELPERS--> Helper function above
 
 //!------NEW ENDPOINT------> ListTeams the "/" endpoint
@@ -163,7 +167,7 @@ export async function listTeams() {
     id: t.id,
     externalTeamId: t.external_team_id,
     name: t.name,
-    shortName: t.short_name,
+    shortName: getDisplayShortName(t.short_name, t.name),
     symbolicName: t.symbolic_name,
     color: t.color,
     awayColor: t.away_color,

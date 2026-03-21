@@ -24,17 +24,41 @@ const TEAM_LOGOS: Record<string, string> = {
   wolves: "https://upload.wikimedia.org/wikipedia/sco/f/fc/Wolverhampton_Wanderers.svg",
 };
 
+const TEAM_SHORT_NAMES: Record<string, string> = {
+  arsenal: "Arsenal",
+  "aston-villa": "Villa",
+  bournemouth: "Bournemouth",
+  brentford: "Brentford",
+  brighton: "Brighton",
+  burnley: "Burnley",
+  chelsea: "Chelsea",
+  "crystal-palace": "Palace",
+  everton: "Everton",
+  fulham: "Fulham",
+  "leeds-united": "Leeds",
+  liverpool: "Liverpool",
+  "manchester-city": "Man City",
+  "manchester-united": "Man Utd",
+  "newcastle-united": "Newcastle",
+  "nottingham-forest": "Forest",
+  sunderland: "Sunderland",
+  tottenham: "Spurs",
+  "west-ham-united": "West Ham",
+  wolves: "Wolves",
+};
+
 type TeamRow = {
   id: number;
   name: string;
   name_for_url: string | null;
+  short_name: string | null;
   logo_url: string | null;
 };
 
 async function main() {
   const { rows } = await pool.query<TeamRow>(
     `
-    SELECT id, name, name_for_url, logo_url
+    SELECT id, name, name_for_url, short_name, logo_url
     FROM teams
     ORDER BY name ASC
     `
@@ -42,23 +66,32 @@ async function main() {
 
   let updated = 0;
   let alreadySet = 0;
-  const missing: string[] = [];
+  const missingLogos: string[] = [];
+  const missingShortNames: string[] = [];
 
   for (const team of rows) {
     const key = team.name_for_url;
 
     if (!key) {
-      missing.push(`${team.name} (missing name_for_url)`);
+      missingLogos.push(`${team.name} (missing name_for_url)`);
+      missingShortNames.push(`${team.name} (missing name_for_url)`);
       continue;
     }
 
     const logoUrl = TEAM_LOGOS[key];
-    if (!logoUrl) {
-      missing.push(`${team.name} (${key})`);
+    const shortName = TEAM_SHORT_NAMES[key];
+
+    if (!logoUrl) missingLogos.push(`${team.name} (${key})`);
+    if (!shortName) missingShortNames.push(`${team.name} (${key})`);
+
+    if (!logoUrl && !shortName) {
       continue;
     }
 
-    if (team.logo_url === logoUrl) {
+    const logoAlreadySet = !logoUrl || team.logo_url === logoUrl;
+    const shortNameAlreadySet = !shortName || team.short_name === shortName;
+
+    if (logoAlreadySet && shortNameAlreadySet) {
       alreadySet++;
       continue;
     }
@@ -66,22 +99,32 @@ async function main() {
     await pool.query(
       `
       UPDATE teams
-      SET logo_url = $2,
+      SET logo_url = COALESCE($2, logo_url),
+          short_name = COALESCE($3, short_name),
           updated_at = now()
       WHERE id = $1
       `,
-      [team.id, logoUrl]
+      [team.id, logoUrl ?? null, shortName ?? null]
     );
 
     updated++;
-    console.log(`Updated ${team.name} -> ${logoUrl}`);
+    console.log(
+      `Updated ${team.name} -> logo=${logoUrl ?? team.logo_url ?? "unchanged"}, shortName=${shortName ?? team.short_name ?? "unchanged"}`
+    );
   }
 
   console.log(`\nDone. Updated ${updated} teams. ${alreadySet} already matched.`);
 
-  if (missing.length > 0) {
-    console.log("\nMissing mappings:");
-    for (const entry of missing) {
+  if (missingLogos.length > 0) {
+    console.log("\nMissing logo mappings:");
+    for (const entry of missingLogos) {
+      console.log(`- ${entry}`);
+    }
+  }
+
+  if (missingShortNames.length > 0) {
+    console.log("\nMissing short-name mappings:");
+    for (const entry of missingShortNames) {
       console.log(`- ${entry}`);
     }
   }
