@@ -192,7 +192,9 @@ opponentStrength = baselinePPG + alpha * (recentPPG - baselinePPG)
 Where
 
 -**baselinePPG** represents the opponent’s longer-term strength
+
 -**recentPPG** captures short-term momentum
+
 -**alpha** controls how much weight is given to recent performance
 
 This allows the model to answer
