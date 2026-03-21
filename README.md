@@ -119,41 +119,93 @@ Current analytics include:
 </p>
 
 ---
-
 ## Analytics Model Summary
+
+The goal of these models is not prediction, but **interpretability**.
+
+Each metric is designed to answer a clear question about team performance using simple, explainable components. Instead of black-box scores, the API exposes how and why each result is computed so users can reason about it directly.
+
+---
 
 ### Team Form
 
-Form is derived from recent completed matches using:
+Form is modeled as a comparison between **current performance** and a **recent historical baseline**, rather than a simple average.
 
-- points per game
+The model uses:
+
+- points per game (PPG)
 - goals for and against
 - goal difference
 - clean sheets
-- volatility from standard deviation of recent match points
+- volatility (standard deviation of match points)
 
-The API also compares a recent window against a baseline window to label current form in a way that stays interpretable.
+**Current form is always defined by the most recent 5 completed matches.**
+
+To make this interpretable, the API compares this 5-match window against an older baseline drawn from a larger recent sample (e.g. last 10 or last 20 matches).
+
+This allows the model to answer:
+
+> “Is the team improving, declining, or stable relative to its recent past?”
+
+The comparison produces:
+
+- **deltaPPG** — how much performance has changed
+- a qualitative **form rating** (improving / stable / declining)
+- a **volatility signal** indicating consistency vs streakiness
+- a **confirmation signal** using goal-difference trends
+
+This structure separates:
+- **current momentum** (last 5 matches)
+- from **context** (the broader recent sample)
+
+The result is a form metric that is both responsive and interpretable:
+users can directly trace how recent results compare to prior performance.
+
+---
 
 ### Rolling Trends
 
-The trends endpoint uses a sliding window over recent completed matches to produce series data for:
+The trends endpoint uses a sliding window over recent completed matches to produce time-series data for:
 
 - points per game
 - goal difference per match
 - goals for per match
 - goals against per match
 
-This makes directional change visible without hiding the underlying math.
+Each point represents a fixed-size window (e.g. 5 matches) that moves forward one match at a time.
+
+This allows the model to answer:
+
+> “How is performance evolving over time?”
+
+By using overlapping windows, the trends smooth short-term noise while still capturing directional change, making momentum shifts visible without hiding the underlying math.
+
+---
 
 ### Fixture Difficulty
 
-Upcoming fixtures are scored with a weighted opponent-strength model:
+Upcoming fixtures are scored using a weighted opponent-strength model:
 
 ```txt
-opponentStrength = baselinePPG + alpha * (recentPPG - baselinePPG)
+opponentStrength = baselinePPG + alpha * (recentPPG - baselinePPG) 
 ```
+Where
 
-That score is then adjusted by venue context and returned with both per-fixture detail and an overall short-run label.
+-**baselinePPG** represents the opponent’s longer-term strength
+-**recentPPG** captures short-term momentum
+-**alpha** controls how much weight is given to recent performance
+
+This allows the model to answer
+
+> “How difficult is the upcoming run, given both opponent quality and recent form?”
+
+The score is further adjusted by venue context (home vs away) and returned with:
+
+- per-fixture difficulty scores
+- qualitative labels (Easy / Medium / Hard)
+- an aggregated short-run difficulty summary
+
+This keeps the model simple, interpretable, and grounded in observable performance rather than opaque predictions.
 
 ---
 
