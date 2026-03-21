@@ -11,7 +11,8 @@
     "migrate:latest": "tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:latest",
     "migrate:rollback": "tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:rollback",
     "migrate:deploy": "NODE_ENV=production npm run migrate:latest",
-    "migrate:make": "tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:make"
+    "migrate:make": "tsx node_modules/knex/bin/cli.js --knexfile knexfile.ts migrate:make",
+    "teams:backfill-logos": "tsx src/scripts/backfillTeamLogos.ts"
   },
   "keywords": [],
   "author": "",

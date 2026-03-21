@@ -51,6 +51,7 @@ This repository is the backend only. It is being built so a future Vercel fronte
 ### 2. Team Exploration
 
 - team list endpoint for browsing clubs
+- team crest/logo URLs returned by the API for frontend rendering
 - team summary endpoint with last completed matches and next fixtures
 - full match-history endpoint with result/fixture filtering
 - perspective-aware result mapping from the selected team view
@@ -162,6 +163,8 @@ GET /api/teams/:teamId/form
 GET /api/teams/:teamId/trends
 GET /api/teams/:teamId/fixture-difficulty
 ```
+
+`GET /api/teams` now includes `logoUrl` for crest rendering on the frontend.
 
 ### User
 

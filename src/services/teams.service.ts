@@ -1,18 +1,22 @@
 import { pool } from "../db/pool.js";
+import type { Team } from "../db/types.js";
 
 /**
  * Represents a row from the `teams` table.
  * This is the minimal set of fields we need for user-facing endpoints.
  */
-type TeamRow = {
-  id: number;                    // internal DB id
-  external_team_id: number;      // external API team id (used in matches)
-  name: string;
-  short_name: string | null;
-  color: string | null;
-  away_color: string | null;
-  image_version: number | null;
-};
+type TeamRow = Pick<
+  Team,
+  | "id"
+  | "external_team_id"
+  | "name"
+  | "short_name"
+  | "symbolic_name"
+  | "color"
+  | "away_color"
+  | "logo_url"
+  | "image_version"
+>;
 
 /**
  * Represents a joined match row:
@@ -145,8 +149,10 @@ export async function listTeams() {
       external_team_id,
       name,
       short_name,
+      symbolic_name,
       color,
       away_color,
+      logo_url,
       image_version
     FROM teams
     ORDER BY COALESCE(popularity_rank, 999999999) ASC, name ASC
@@ -158,8 +164,10 @@ export async function listTeams() {
     externalTeamId: t.external_team_id,
     name: t.name,
     shortName: t.short_name,
+    symbolicName: t.symbolic_name,
     color: t.color,
     awayColor: t.away_color,
+    logoUrl: t.logo_url,
     imageVersion: t.image_version,
   }));
 }
@@ -187,8 +195,10 @@ export async function getTeamSummary(
       external_team_id,
       name,
       short_name,
+      symbolic_name,
       color,
       away_color,
+      logo_url,
       image_version
     FROM teams
     WHERE id = $1
