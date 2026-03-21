@@ -320,5 +320,3 @@ PremTracker is a strong backend-focused project because it combines:
 - protected admin workflows
 - deployed production setup
 - explainable analytics tied to a real user-facing product direction
-
-It is not just a sports API wrapper. It is an intentionally engineered backend for a real application.
