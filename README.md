@@ -11,26 +11,6 @@ It is designed as the API layer for a full-stack soccer product: the backend is 
 
 ---
 
-## What The Product Does
-
-PremTracker lets authenticated users:
-
-- browse Premier League teams
-- inspect team summaries, historical matches, recent form, rolling trends, and fixture difficulty
-- favorite teams
-- manage email preferences
-- receive fixture-related emails after verification and opt-in
-
-It also includes protected admin tooling to keep match data fresh through a controlled EPL sync workflow.
-
-This repository is the backend only. It is being built so a future Vercel frontend can consume it cleanly with:
-
-- bearer access tokens for API requests
-- rotating refresh tokens in `httpOnly` cookies
-- CORS and cookie settings that support cross-origin frontend/backend deployment
-- frontend-friendly email verification redirects
----
-
 ## Purpose
 
 PremTracker was built at the intersection of computer science, mathematics, and a passion for soccer.
@@ -50,6 +30,26 @@ Every metric in this system is intentionally designed so that a user can answer:
 Instead of hiding the math, PremTracker surfaces it — turning raw match data into insights that are both meaningful and accessible, even for non-technical users.
 
 This project reflects my belief that mathematics should not be hidden behind abstractions, but used as a tool to make real-world systems more understandable.
+
+## What The Product Does
+
+PremTracker lets authenticated users:
+
+- browse Premier League teams
+- inspect team summaries, historical matches, recent form, rolling trends, and fixture difficulty
+- favorite teams
+- manage email preferences
+- receive fixture-related emails after verification and opt-in
+
+It also includes protected admin tooling to keep match data fresh through a controlled EPL sync workflow.
+
+This repository is the backend only. It is being built so a future Vercel frontend can consume it cleanly with:
+
+- bearer access tokens for API requests
+- rotating refresh tokens in `httpOnly` cookies
+- CORS and cookie settings that support cross-origin frontend/backend deployment
+- frontend-friendly email verification redirects
+---
 
 
 ## Core Features
