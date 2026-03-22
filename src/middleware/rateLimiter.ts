@@ -61,10 +61,6 @@ export default async function rateLimiter(
 
     // More protection for sensitive routes
     if (
-      path.includes("/auth/login") ||
-      path.includes("/auth/register") ||
-      path.includes("/auth/forgot-password") ||
-      path.includes("/auth/reset-password") ||
       path.includes("/admin")
     ) {
       return res.status(503).json({
