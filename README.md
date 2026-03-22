@@ -182,32 +182,55 @@ By using overlapping windows, the trends smooth short-term noise while still cap
 
 ---
 
-### Fixture Difficulty
+### Upcoming Fixture Difficulty
 
-Upcoming fixtures are scored using a weighted opponent-strength model:
+Fixture difficulty is modeled using an **interpretable opponent-strength formula** that balances long-term quality with short-term momentum:
 
 ```txt
 opponentStrength = baselinePPG + alpha * (recentPPG - baselinePPG) 
 ```
-Where
 
--**baselinePPG** represents the opponent’s longer-term strength
+---
 
--**recentPPG** captures short-term momentum
+#### Components
 
--**alpha** controls how much weight is given to recent performance
+- **baselinePPG**: Opponent’s long-term strength  
+- **recentPPG**: Opponent’s recent form (momentum)  
+- **alpha ∈ [0,1]**: Weight assigned to recent performance  
+  - `alpha = 0`: Only long-term strength matters  
+  - `alpha = 1`: Only recent form matters  
+  - Default: `alpha = 0.4` (balances stability and responsiveness)
 
-This allows the model to answer
+---
 
-> “How difficult is the upcoming run, given both opponent quality and recent form?”
+#### What the Model Does
 
-The score is further adjusted by venue context (home vs away) and returned with:
+> How difficult is an upcoming opponent given both their overall quality and current form?
 
-- per-fixture difficulty scores
-- qualitative labels (Easy / Medium / Hard)
-- an aggregated short-run difficulty summary
+Difficulty is also adjusted for **venue context** (home vs. away).
 
-This keeps the model simple, interpretable, and grounded in observable performance rather than opaque predictions.
+---
+
+#### Output
+
+The API returns:
+
+- Per-fixture difficulty scores  
+- Easy / Medium / Hard labels  
+- Aggregated difficulty for the next `N` fixtures  
+
+---
+
+#### Tunable Design
+
+The model is intentionally parameterized:
+
+- **alpha**: Sensitivity to momentum  
+- **oppMatches**: Baseline window size  
+- **recentOppMatches**: Recent performance window  
+- **fixtures**: Number of upcoming matches  
+
+This keeps the system **transparent, adjustable, and interpretable**, rather than a black-box prediction.
 
 ---
 
