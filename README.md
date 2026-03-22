@@ -7,7 +7,7 @@ It is designed as the API layer for a full-stack soccer product: the backend is 
 **Deployed API base::** [https://premtracker-api.onrender.com](https://premtracker-api.onrender.com)  
 **Health check:** [https://premtracker-api.onrender.com/api/health](https://premtracker-api.onrender.com/api/health)
 
-**Frontend:** upcoming Vercel client
+**Frontend:** https://premtracker.pro
 
 ---
 
