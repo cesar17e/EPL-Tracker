@@ -6,7 +6,7 @@ It is designed as the API layer for a full-stack soccer product: the backend is 
 
 - **Deployed API base:** https://premtracker-api.onrender.com
 - **Health check:** https://premtracker-api.onrender.com/api/health
-- **Frontend:** https://premtracker.pro
+- **Live Site:** https://premtracker.pro
 - **Frontend Github Repo:** https://github.com/cesar17e/PremTracker-Frontend
 ---
 
