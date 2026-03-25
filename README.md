@@ -4,11 +4,10 @@ PremTracker is a production-oriented Premier League analytics backend built with
 
 It is designed as the API layer for a full-stack soccer product: the backend is live on Render today, and a Vercel frontend is the next planned step. The goal is not black-box prediction. The goal is to expose transparent, explainable team analytics — where every output can be traced back to clear, interpretable mathematical reasoning.
 
-**Deployed API base::** [https://premtracker-api.onrender.com](https://premtracker-api.onrender.com)  
-**Health check:** [https://premtracker-api.onrender.com/api/health](https://premtracker-api.onrender.com/api/health)
-
-**Frontend:** https://premtracker.pro
-
+- **Deployed API base:** https://premtracker-api.onrender.com
+- **Health check:** https://premtracker-api.onrender.com/api/health
+- **Frontend:** https://premtracker.pro
+- **Frontend Github Repo:** https://github.com/cesar17e/PremTracker-Frontend
 ---
 
 ## Purpose
