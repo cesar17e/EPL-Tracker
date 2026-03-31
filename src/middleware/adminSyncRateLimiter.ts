@@ -22,6 +22,8 @@ export default async function adminSyncRateLimiter(
     return next();
   } catch (err) {
     console.error("Admin sync rate limiter error:", err);
-    return next(); // fail-open
+    return res.status(503).json({
+      error: "Service temporarily unavailable. Please try again shortly.",
+    });
   }
 }

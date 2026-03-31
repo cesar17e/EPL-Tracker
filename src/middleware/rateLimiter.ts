@@ -59,10 +59,23 @@ export default async function rateLimiter(
 
     const path = `${req.baseUrl}${req.path}`;
 
-    // More protection for sensitive routes
-    if (
-      path.includes("/admin")
-    ) {
+    // Fail-closed for sensitive routes if Redis/Upstash is unavailable
+    const sensitiveRoutes = [
+      "/api/admin",
+      "/api/auth/login",
+      "/api/auth/register",
+      "/api/auth/forgot-password",
+      "/api/auth/reset-password",
+      "/api/auth/refresh",
+      "/api/auth/request-verify",
+      "/api/me/email-fixtures",
+    ];
+
+    const shouldFailClosed = sensitiveRoutes.some((prefix) =>
+      path.startsWith(prefix)
+    );
+
+    if (shouldFailClosed) {
       return res.status(503).json({
         message: "Service temporarily unavailable. Please try again shortly.",
       });
