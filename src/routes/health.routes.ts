@@ -1,13 +1,11 @@
 import { Router } from "express";
-import { pool } from "../db/pool.js";
 
-//A simple health route to see if connection is all good
+//A simpe health route that doesnt query to the db
 
 const router = Router();
 
-router.get("/", async (_req, res) => {
-  const r = await pool.query("SELECT 1 AS ok");
-  res.json({ ok: true, db: r.rows[0] });
+router.get("/", (_req, res) => {
+  res.json({ ok: true, service: "running" });
 });
 
 export default router;
